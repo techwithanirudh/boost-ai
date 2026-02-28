@@ -1,90 +1,126 @@
-# Boost + Xiaomi Camera Setup (Raspberry Pi)
+# boost-ai
 
-This repo currently vendors `videoP2Proxy` and runs it on a 64-bit Pi by cross-building a 32-bit binary (required by bundled Xiaomi/TUTK libs).
+AI has a body. Gemini sees through a camera mounted on a LEGO BOOST robot, narrates what it sees, and steers the motors via tool calls.
 
-## Prerequisites (global packages)
-
-```bash
-sudo dpkg --add-architecture armhf
-sudo apt-get update
-
-sudo apt-get install -y \
-  build-essential git python3 python3-dev python3-miio \
-  autoconf automake libtool pkg-config libjson-c-dev libjson-c-dev:armhf \
-  gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf \
-  libc6:armhf libstdc++6:armhf
+```
+[Camera]  →  [agent]  ←→  Gemini Live API
+                │ HTTP
+                ▼
+         [pyhub-service]
+                │ BLE
+                ▼
+        LEGO BOOST Move Hub
 ```
 
-Notes:
-- `liblivemedia-dev` is not available on this distro repo, so this setup builds without RTSP mode.
-- Xiaomi CLI is available as `python3 -m miio.cli`.
+## Repo layout
 
-## Build `videoP2Proxy`
-
-```bash
-cd videoP2Proxy
-make distclean >/dev/null 2>&1 || true
-
-PKG_CONFIG_LIBDIR=/usr/lib/arm-linux-gnueabihf/pkgconfig:/usr/share/pkgconfig \
-CC=arm-linux-gnueabihf-gcc \
-CXX=arm-linux-gnueabihf-g++ \
-./configure \
-  --host=arm-linux-gnueabihf \
-  --with-p2plibpath=./lib/Linux/Arm_BCM2836_4.8.3 \
-  --disable-live555
-
-make -j"$(nproc)"
-sudo make install
+```
+boost/
+  services/
+    agent/          # Gemini Live agent — vision + tool dispatch  (Phase 3)
+    pyhub-service/  # FastAPI + pylgbst — BLE motor control       ✅ done
+  docs/
+    runbook.md
+    calibration.md
 ```
 
-## Run proxy
+---
+
+## pyhub-service
+
+FastAPI service that exposes the LEGO BOOST Move Hub over HTTP. The agent calls it to move the robot.
+
+### Setup
 
 ```bash
-videop2proxy --ip CAMERA_IP --token CAMERA_HEX_TOKEN --stdout
+cd services/pyhub-service
+
+# 1. Install system Bluetooth stack (first time only)
+sudo apt-get install -y bluetooth bluez
+sudo systemctl enable --now bluetooth
+sudo usermod -aG bluetooth $USER   # re-login after
+
+# 2. Find hub MAC
+python scan_hub.py                 # press green button on hub first
+
+# 3. Create .env
+cp .env.example .env
+# Edit HUB_MAC to the address found above
+
+# 4. Create venv + install
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+
+# 5. Verify connection
+.venv/bin/python test_connect.py   # robot should nudge forward
 ```
 
-## Xiaomi token extraction (recommended)
-
-`python-miio` cloud login is often blocked by Xiaomi captcha/verification challenges.
-Use `Xiaomi-cloud-tokens-extractor` instead.
-
-### Option A: one-liner (run.sh)
+### Run
 
 ```bash
-bash <(curl -L https://github.com/PiotrMachowski/Xiaomi-cloud-tokens-extractor/raw/master/run.sh)
+.venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
-### Option B: manual (same result)
+### Environment variables
 
-```bash
-cd /home/node/boost
-git clone https://github.com/PiotrMachowski/Xiaomi-cloud-tokens-extractor.git
-cd Xiaomi-cloud-tokens-extractor
-python3 -m pip install --break-system-packages -r requirements.txt
-python3 token_extractor.py
+| Variable             | Default           | Description                          |
+|----------------------|-------------------|--------------------------------------|
+| `HUB_MAC`            | `AA:BB:CC:DD:EE:FF` | LEGO Move Hub Bluetooth MAC        |
+| `MOCK_HUB`           | `false`           | `true` = log-only, no BLE needed     |
+| `WATCHDOG_TIMEOUT_S` | `5`               | Auto-stop motors after N seconds idle|
+| `PORT`               | `8000`            | uvicorn port                         |
+
+### API
+
+| Method | Path        | Description                  |
+|--------|-------------|------------------------------|
+| POST   | `/execute`  | Run a motion primitive       |
+| POST   | `/stop`     | Emergency stop               |
+| GET    | `/health`   | Liveness + BLE status        |
+| GET    | `/telemetry`| Battery voltage              |
+
+**POST /execute**
+```json
+{
+  "command_id": "abc123",
+  "primitive": "forward_cm",
+  "args": { "distance_cm": 20, "speed": 0.5 }
+}
 ```
 
-During login:
-- choose `q` for QR login
-- choose server `i2` for India
-- copy token for your camera model (for example `chuangmi.camera.ipc019`)
+Primitives: `forward_cm`, `backward_cm`, `turn_deg`, `stop`
 
-Then run proxy using that token:
-
-```bash
-videop2proxy --ip CAMERA_IP --token CAMERA_HEX_TOKEN --stdout
+**GET /health**
+```json
+{ "ok": true, "ble_connected": true, "mock": false }
 ```
 
-## Xiaomi cloud CLI (legacy / may fail)
+### Motion calibration
 
-List commands:
+Edit `hub.py` constants to match your build:
 
-```bash
-python3 -m miio.cli cloud --help
+```python
+WHEEL_DIAMETER_CM = 5.4    # Vernie wheel (part 2515, 54 mm)
+TRACK_WIDTH_CM    = 12.0   # wheel center-to-center
 ```
 
-Login + list devices:
+See [`docs/calibration.md`](docs/calibration.md) for procedure.
 
-```bash
-python3 -m miio.cli cloud --username YOUR_EMAIL --password YOUR_PASSWORD list
-```
+### RPi BLE troubleshooting
+
+| Problem | Fix |
+|---------|-----|
+| `hci0` not found | `sudo hciconfig hci0 reset` |
+| Permission denied | `sudo usermod -aG bluetooth $USER` + re-login |
+| Hub not found after reconnect | Wait 5 s (hub LED clears); press button to re-advertise |
+| BT + Wi-Fi interference (RPi 3) | Disable Wi-Fi or use USB BT 5.0 dongle |
+
+---
+
+## agent
+
+> Phase 3 — coming next.
+
+Raw `google-genai` loop: captures camera frames at 1 fps, streams them to Gemini Live (text mode), and dispatches tool calls (`forward_cm`, `turn_deg`, `stop`) to pyhub-service.
+
+See [`plan.md`](plan.md) for full implementation.
