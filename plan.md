@@ -6,9 +6,7 @@
 |---|---|---|
 | Gemini Live API | [ai.google.dev/gemini-api/docs/live](https://ai.google.dev/gemini-api/docs/live) | `google-genai` |
 | Live API Tool Use | [ai.google.dev/gemini-api/docs/live-tools](https://ai.google.dev/gemini-api/docs/live-tools) | — |
-| Pipecat | [docs.pipecat.ai](https://docs.pipecat.ai) | `pipecat-ai[daily,google,silero,images]` |
-| Pipecat Gemini Live | [docs.pipecat.ai/server/services/llm/gemini-live](https://docs.pipecat.ai/server/services/llm/gemini-live) | — |
-| Daily WebRTC | [docs.daily.co](https://docs.daily.co) | `pipecat-ai[daily]` |
+| google-genai SDK | [github.com/googleapis/python-genai](https://github.com/googleapis/python-genai) | `google-genai` |
 | pylgbst | [github.com/undera/pylgbst](https://github.com/undera/pylgbst) | `pylgbst[bleak]` 1.3.0 |
 | pylgbst Motor docs | [github.com/undera/pylgbst/blob/master/docs/Motor.md](https://github.com/undera/pylgbst/blob/master/docs/Motor.md) | `bleak` >=0.21 |
 | FastAPI | [fastapi.tiangolo.com](https://fastapi.tiangolo.com) | `fastapi[standard]` 0.134.0 |
@@ -17,20 +15,22 @@
 
 ## 1) What we're building
 
-AI has a body. Gemini sees through a camera mounted on the robot, hears through a mic, narrates what it sees, and steers the LEGO BOOST Move Hub via motor tool calls.
+AI has a body. Gemini sees through a camera mounted on the robot, narrates what it sees, and steers the LEGO BOOST Move Hub via motor tool calls.
+
+**No audio loop. No Pipecat. Raw `google-genai` + FastAPI.**
 
 **Two services, both Python, both on RPi:**
 
 ```
 [RTSP camera / RPi cam]
-        │ frames (1fps JPEG)
+        │ JPEG frames (1fps)
         ▼
-  [pipecat-agent]         ←→   Gemini Live API
-   Pipecat pipeline              (vision + audio + tool calling)
-   Silero VAD
-   @ai_callable tools:
+  [agent]                 ←→   Gemini Live API
+   Raw google-genai              text mode + vision + tool calling
+   asyncio loop
+   tool handlers:
      forward_cm / turn_deg / stop
-        │ HTTP
+        │ HTTP (httpx)
         ▼
   [pyhub-service]
    FastAPI + pylgbst
@@ -39,7 +39,7 @@ AI has a body. Gemini sees through a camera mounted on the robot, hears through 
   LEGO BOOST Move Hub
 ```
 
-Frontend lives on another server — out of scope here. The pipecat-agent joins a Daily room; operators connect from wherever.
+Frontend lives on another server — out of scope. No audio, no WebRTC, no extra dependencies.
 
 ---
 
@@ -48,22 +48,22 @@ Frontend lives on another server — out of scope here. The pipecat-agent joins 
 ```
 boost/                    # git root
   services/
-    pipecat-agent/        # Python — Gemini brain + camera + tool dispatch
+    agent/                # Python — raw Gemini Live + camera + tool dispatch
       agent.py
       camera.py
       requirements.txt
       .env
     pyhub-service/        # Python — FastAPI + pylgbst BLE motor control
-      main.py
-      hub.py
-      requirements.txt
-      .env
+      main.py             # ✅ done
+      hub.py              # ✅ done
+      requirements.txt    # ✅ done
+      .env.example        # ✅ done
   docs/
     runbook.md
     calibration.md
 ```
 
-No monorepo tooling needed. Each service has its own `venv` and `requirements.txt`.
+No monorepo tooling. Each service has its own `venv` and `requirements.txt`.
 
 ---
 
@@ -132,153 +132,191 @@ pip install picamera2 opencv-python-headless
 
 ---
 
-## 4) pipecat-agent
+## 4) agent (raw google-genai)
 
 ### Install
 ```bash
-pip install "pipecat-ai[daily,google,silero,images]" python-dotenv httpx opencv-python-headless
+pip install google-genai httpx opencv-python-headless python-dotenv
+# For RPi cam instead of RTSP:
+# pip install picamera2
 ```
 
 ### `.env`
 ```
 GOOGLE_API_KEY=...
-DAILY_API_KEY=...
 PYHUB_URL=http://localhost:8000
-CAMERA_RTSP=rtsp://192.168.x.x:554/stream   # or leave blank to use RPi cam
+CAMERA_RTSP=rtsp://192.168.x.x:554/stream
 ```
 
-### `agent.py`
+### System prompt
+```
+You are an AI with a physical body — a LEGO BOOST robot.
+You see through an onboard camera (one frame per second).
+Your job: explore the world, narrate what you see, and navigate safely.
+
+Rules:
+- Analyse every frame before deciding to move.
+- If you see an obstacle or the path is unclear, stop and turn first.
+- Max 30 cm per forward_cm call.
+- Max 90° per turn_deg call.
+- Always call stop() before changing direction.
+- After every movement, wait for the next frame before acting again.
+```
+
+### `agent.py` — full implementation
 
 ```python
-import os, asyncio, uuid
+import asyncio, os, uuid
 import httpx
+import cv2
 from dotenv import load_dotenv
-from loguru import logger
-
-from pipecat.audio.vad.silero import SileroVADAnalyzer
-from pipecat.pipeline.pipeline import Pipeline
-from pipecat.pipeline.runner import PipelineRunner
-from pipecat.pipeline.task import PipelineParams, PipelineTask
-from pipecat.processors.aggregators.llm_context import LLMContext
-from pipecat.processors.aggregators.llm_response_universal import (
-    LLMContextAggregatorPair, LLMUserAggregatorParams,
-)
-from pipecat.runner.types import RunnerArguments
-from pipecat.runner.utils import create_transport
-from pipecat.services.google.gemini_live.llm import GeminiLiveLLMService
-from pipecat.transports.daily.transport import DailyParams
-from pipecat.frames.frames import LLMRunFrame
-
-from camera import Camera
+from google import genai
+from google.genai import types
 
 load_dotenv()
 
 PYHUB_URL = os.getenv("PYHUB_URL", "http://localhost:8000")
+MODEL     = "gemini-2.5-flash-native-audio-preview-12-2025"
 
-SYSTEM_INSTRUCTION = """
+SYSTEM_PROMPT = """
 You are an AI with a physical body — a LEGO BOOST robot.
-You see through a camera and can move through the world.
-
-Your job: explore, narrate what you see, navigate safely.
+You see through an onboard camera (one frame per second).
+Your job: explore the world, narrate what you see, and navigate safely.
 
 Rules:
-- If you see an obstacle closer than ~30 cm, stop and turn before moving forward.
-- Call stop() if uncertain.
-- After each move, wait for the next camera frame before deciding again.
-- Describe what you see before acting.
-- Max 30 cm per forward command. Max 90° per turn command.
+- Analyse every frame before deciding to move.
+- If you see an obstacle or the path is unclear, stop and turn first.
+- Max 30 cm per forward_cm call. Max 90° per turn_deg call.
+- Always call stop() before changing direction.
+- After every movement, wait for the next frame before acting again.
 """
 
+TOOLS = [{"function_declarations": [
+    {
+        "name": "forward_cm",
+        "description": "Drive straight forward N centimetres (max 30).",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "distance_cm": {"type": "number"},
+                "speed":       {"type": "number", "description": "0.0–1.0, default 0.5"},
+            },
+            "required": ["distance_cm"],
+        },
+    },
+    {
+        "name": "turn_deg",
+        "description": "Turn in place. Positive = right, negative = left (max ±90°).",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "angle_deg": {"type": "number"},
+            },
+            "required": ["angle_deg"],
+        },
+    },
+    {
+        "name": "stop",
+        "description": "Stop all motors immediately.",
+        "parameters": {"type": "object", "properties": {}},
+    },
+]}]
 
-async def dispatch(primitive: str, args: dict = {}):
+CONFIG = types.LiveConnectConfig(
+    response_modalities=["TEXT"],   # text mode → reliable tool calling
+    system_instruction=SYSTEM_PROMPT,
+    tools=TOOLS,
+)
+
+
+async def dispatch(primitive: str, args: dict = {}) -> dict:
     async with httpx.AsyncClient() as client:
-        await client.post(f"{PYHUB_URL}/execute", json={
+        r = await client.post(f"{PYHUB_URL}/execute", json={
             "command_id": uuid.uuid4().hex,
-            "primitive": primitive,
-            "args": args,
-        }, timeout=10)
+            "primitive":  primitive,
+            "args":       args,
+        }, timeout=15)
+        return r.json()
 
 
-async def run_bot(transport, runner_args: RunnerArguments):
-    cam = Camera()
+async def handle_tool_call(session, tool_call) -> None:
+    responses = []
+    for fc in tool_call.function_calls:
+        print(f"  → tool: {fc.name}({fc.args})")
+        try:
+            if fc.name == "stop":
+                async with httpx.AsyncClient() as c:
+                    await c.post(f"{PYHUB_URL}/stop")
+                result = {"stopped": True}
+            else:
+                result = await dispatch(fc.name, dict(fc.args))
+        except Exception as e:
+            result = {"error": str(e)}
 
-    llm = GeminiLiveLLMService(
-        api_key=os.getenv("GOOGLE_API_KEY"),
-        voice_id="Kore",
-        system_instruction=SYSTEM_INSTRUCTION,
-    )
+        responses.append(types.FunctionResponse(
+            id=fc.id, name=fc.name, response={"result": result}
+        ))
 
-    @llm.ai_callable(description="Drive forward N centimetres (max 30)")
-    async def forward_cm(distance_cm: float, speed: float = 0.5):
-        await dispatch("forward_cm", {"distance_cm": min(distance_cm, 30), "speed": speed})
-
-    @llm.ai_callable(description="Turn in place. Positive = right, negative = left (max ±90°)")
-    async def turn_deg(angle_deg: float):
-        clamped = max(-90, min(90, angle_deg))
-        await dispatch("turn_deg", {"angle_deg": clamped})
-
-    @llm.ai_callable(description="Stop all motors immediately")
-    async def stop():
-        async with httpx.AsyncClient() as client:
-            await client.post(f"{PYHUB_URL}/stop")
-
-    messages = [{"role": "user", "content": "Start exploring. Describe what you see."}]
-    context = LLMContext(messages)
-    user_agg, assistant_agg = LLMContextAggregatorPair(
-        context,
-        user_params=LLMUserAggregatorParams(vad_analyzer=SileroVADAnalyzer()),
-    )
-
-    pipeline = Pipeline([
-        transport.input(),
-        user_agg,
-        llm,
-        transport.output(),
-        assistant_agg,
-    ])
-
-    task = PipelineTask(pipeline, params=PipelineParams(
-        enable_metrics=True, enable_usage_metrics=True,
-    ))
-
-    # Inject camera frames at 1fps into Gemini Live context
-    async def camera_loop():
-        while True:
-            try:
-                jpeg_bytes = cam.capture_jpeg(quality=60)
-                await llm.push_frame(jpeg_bytes)
-            except Exception as e:
-                logger.warning(f"Camera error: {e}")
-            await asyncio.sleep(1)
-
-    @task.rtvi.event_handler("on_client_ready")
-    async def on_client_ready(rtvi):
-        asyncio.create_task(camera_loop())
-        await task.queue_frames([LLMRunFrame()])
-
-    @transport.event_handler("on_client_disconnected")
-    async def on_client_disconnected(transport, client):
-        await task.cancel()
-
-    runner = PipelineRunner()
-    await runner.run(task)
+    await session.send_tool_response(function_responses=responses)
 
 
-async def bot(runner_args: RunnerArguments):
-    transport_params = {
-        "daily": lambda: DailyParams(
-            audio_in_enabled=True,
-            audio_out_enabled=True,
-            video_in_enabled=True,
+async def camera_loop(session, stop_event: asyncio.Event) -> None:
+    rtsp = os.getenv("CAMERA_RTSP")
+    cap  = cv2.VideoCapture(rtsp if rtsp else 0)
+    try:
+        while not stop_event.is_set():
+            ret, frame = cap.read()
+            if ret:
+                _, buf = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 60])
+                await session.send_realtime_input(
+                    video=types.Blob(data=buf.tobytes(), mime_type="image/jpeg")
+                )
+            await asyncio.sleep(1)   # 1fps — Gemini Live limit
+    finally:
+        cap.release()
+
+
+async def response_loop(session, stop_event: asyncio.Event) -> None:
+    async for response in session.receive():
+        if response.text:
+            print(f"Gemini: {response.text}", end="", flush=True)
+
+        if response.tool_call:
+            await handle_tool_call(session, response.tool_call)
+
+        if response.server_content and response.server_content.interrupted:
+            print("[interrupted]")
+
+        if stop_event.is_set():
+            break
+
+
+async def main():
+    client = genai.Client()
+    stop_event = asyncio.Event()
+
+    print(f"Connecting to Gemini Live ({MODEL})...")
+    async with client.aio.live.connect(model=MODEL, config=CONFIG) as session:
+        print("Connected. Starting camera + response loop. Ctrl+C to stop.\n")
+
+        # Kick off with an initial prompt so Gemini starts observing
+        await session.send_client_content(
+            turns={"role": "user", "parts": [{"text": "Start exploring. What do you see?"}]},
+            turn_complete=True,
         )
-    }
-    transport = await create_transport(runner_args, transport_params)
-    await run_bot(transport, runner_args)
+
+        try:
+            await asyncio.gather(
+                camera_loop(session, stop_event),
+                response_loop(session, stop_event),
+            )
+        except KeyboardInterrupt:
+            stop_event.set()
+            print("\nStopping...")
 
 
 if __name__ == "__main__":
-    from pipecat.runner.run import main
-    main()
+    asyncio.run(main())
 ```
 
 ---
