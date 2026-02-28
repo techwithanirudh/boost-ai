@@ -13,7 +13,6 @@ import logging
 
 from pylgbst import get_connection_bleak
 from pylgbst.hub import MoveHub
-from pylgbst.peripherals import EncodedMotor
 
 log = logging.getLogger(__name__)
 

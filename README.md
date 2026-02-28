@@ -17,8 +17,8 @@ AI has a body. Gemini sees through a camera mounted on a LEGO BOOST robot, narra
 ```
 boost/
   services/
-    agent/          # Gemini Live agent — vision + tool dispatch  (Phase 3)
-    pyhub-service/  # FastAPI + pylgbst — BLE motor control       ✅ done
+    agent/          # Gemini Live agent — vision + tool dispatch  ✅ done
+    pyhub/          # FastAPI + pylgbst — BLE motor control       ✅ done
   docs/
     runbook.md
     calibration.md
@@ -26,14 +26,14 @@ boost/
 
 ---
 
-## pyhub-service
+## pyhub
 
 FastAPI service that exposes the LEGO BOOST Move Hub over HTTP. The agent calls it to move the robot.
 
 ### Setup
 
 ```bash
-cd services/pyhub-service
+cd services/pyhub
 
 # 1. Install system Bluetooth stack (first time only)
 sudo apt-get install -y bluetooth bluez
@@ -119,8 +119,41 @@ See [`docs/calibration.md`](docs/calibration.md) for procedure.
 
 ## agent
 
-> Phase 3 — coming next.
+Raw `google-genai` loop: captures camera frames at 1 fps, streams them to Gemini Live (text mode + vision), and dispatches tool calls to pyhub over HTTP.
 
-Raw `google-genai` loop: captures camera frames at 1 fps, streams them to Gemini Live (text mode), and dispatches tool calls (`forward_cm`, `turn_deg`, `stop`) to pyhub-service.
+### Setup
 
-See [`plan.md`](plan.md) for full implementation.
+```bash
+cd services/agent
+
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+
+cp .env.example .env
+# Set GOOGLE_API_KEY and optionally CAMERA_RTSP
+```
+
+### Run
+
+Start pyhub first, then:
+
+```bash
+.venv/bin/python agent.py
+```
+
+### Environment variables
+
+| Variable       | Default                  | Description                              |
+|----------------|--------------------------|------------------------------------------|
+| `GOOGLE_API_KEY` | —                      | Gemini API key (required)                |
+| `PYHUB_URL`    | `http://localhost:8000`  | pyhub service base URL                   |
+| `CAMERA_RTSP`  | *(unset)*                | RTSP stream URL; unset = local cam (0)   |
+
+### Tools exposed to Gemini
+
+| Tool          | Description                              |
+|---------------|------------------------------------------|
+| `forward_cm`  | Drive forward N cm (max 30)             |
+| `backward_cm` | Drive backward N cm (max 30)            |
+| `turn_deg`    | Turn in place ±90°                       |
+| `stop`        | Emergency stop                           |

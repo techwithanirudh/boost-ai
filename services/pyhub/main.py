@@ -21,12 +21,13 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
+
+load_dotenv()
+
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from hub import Watchdog, connect, forward_cm, backward_cm, turn_deg, stop
-
-load_dotenv()
 
 logging.basicConfig(
     level=logging.INFO,
@@ -73,7 +74,7 @@ def _require_hub():
 
 async def _run_sync(fn, *args):
     """Run a blocking hub call in the serial executor."""
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     return await loop.run_in_executor(_executor, fn, *args)
 
 
@@ -158,7 +159,7 @@ async def telemetry():
     voltage = None
     if hub and hasattr(hub, "voltage") and hub.voltage is not None:
         try:
-            voltage = hub.voltage.last_value
+            voltage = hub.voltage.voltage
         except Exception:
             pass
     return TelemetryResponse(ble_connected=hub is not None, battery_voltage=voltage)
