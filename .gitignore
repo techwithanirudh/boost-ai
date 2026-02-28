@@ -1,0 +1,5 @@
+# Local environment
+.venv/
+
+# Local third-party clone for camera testing
+videoP2Proxy/
