@@ -43,7 +43,39 @@ sudo make install
 videop2proxy --ip CAMERA_IP --token CAMERA_HEX_TOKEN --stdout
 ```
 
-## Xiaomi cloud CLI
+## Xiaomi token extraction (recommended)
+
+`python-miio` cloud login is often blocked by Xiaomi captcha/verification challenges.
+Use `Xiaomi-cloud-tokens-extractor` instead.
+
+### Option A: one-liner (run.sh)
+
+```bash
+bash <(curl -L https://github.com/PiotrMachowski/Xiaomi-cloud-tokens-extractor/raw/master/run.sh)
+```
+
+### Option B: manual (same result)
+
+```bash
+cd /home/node/boost
+git clone https://github.com/PiotrMachowski/Xiaomi-cloud-tokens-extractor.git
+cd Xiaomi-cloud-tokens-extractor
+python3 -m pip install --break-system-packages -r requirements.txt
+python3 token_extractor.py
+```
+
+During login:
+- choose `q` for QR login
+- choose server `i2` for India
+- copy token for your camera model (for example `chuangmi.camera.ipc019`)
+
+Then run proxy using that token:
+
+```bash
+videop2proxy --ip CAMERA_IP --token CAMERA_HEX_TOKEN --stdout
+```
+
+## Xiaomi cloud CLI (legacy / may fail)
 
 List commands:
 
