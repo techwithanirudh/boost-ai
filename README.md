@@ -1,159 +1,146 @@
 # boost-ai
 
-AI has a body. Gemini sees through a camera mounted on a LEGO BOOST robot, narrates what it sees, and steers the motors via tool calls.
+AI has a body. Gemini sees through a camera mounted on a LEGO BOOST robot, narrates what it sees, and steers motors via tool calls.
 
 ```
-[Camera]  →  [agent]  ←→  Gemini Live API
-                │ HTTP
-                ▼
-         [pyhub-service]
-                │ BLE
-                ▼
-        LEGO BOOST Move Hub
+[Larix on iPhone] --RTMP--> [MediaMTX] --RTSP--> [agent] --HTTP--> [pyhub] --BLE--> LEGO BOOST
 ```
+
+## One-shot run (Docker Compose)
+
+### 1) Set env files
+
+```bash
+cd /home/node/boost
+
+cp services/agent/.env.example services/agent/.env
+cp services/pyhub/.env.example services/pyhub/.env
+```
+
+Edit:
+
+- `services/agent/.env`
+  - `GOOGLE_API_KEY=...`
+  - `PYHUB_URL=http://localhost:8000`
+  - `CAMERA_RTSP=rtsp://localhost:8554/live/stream`
+
+- `services/pyhub/.env`
+  - `HUB_MAC=<your boost hub mac>`
+  - `MOCK_HUB=false` (or `true` for dry run)
+  - `WATCHDOG_TIMEOUT_S=5`
+  - `HUB_CONNECT_TIMEOUT_S=300`
+  - `DATABASE_URL=sqlite:///../../storage/pyhub.db`
+
+### 2) Start stack
+
+```bash
+docker compose up -d --build
+```
+
+### 3) Check logs
+
+```bash
+docker compose logs -f mediamtx pyhub agent
+```
+
+### 4) Stop stack
+
+```bash
+docker compose down
+```
+
+---
+
+## Larix Broadcaster setup (iPhone)
+
+Find Pi IP:
+
+```bash
+ip -4 addr show wlan0
+```
+
+Assume Pi IP is `192.168.0.118`.
+
+### Important: app/stream format
+
+Larix expects **app + stream key** for RTMP.
+
+Use either:
+
+1. URL + stream key fields:
+   - URL: `rtmp://192.168.0.118:1935/live`
+   - Stream name/key: `stream`
+
+2. Single URL field:
+   - `rtmp://192.168.0.118:1935/live/stream`
+
+If you only use `rtmp://...:1935/live`, many clients show "invalid URL" or "can't find app/stream".
+
+Read stream from Pi:
+
+- `rtsp://192.168.0.118:8554/live/stream`
+
+Set this same URL in `services/agent/.env` as `CAMERA_RTSP`.
+
+---
+
+## Service details
+
+### MediaMTX
+
+- RTMP publish: port `1935`
+- RTSP read: port `8554`
+- Config: `infra/mediamtx/mediamtx.yml`
+
+### pyhub
+
+FastAPI endpoints:
+
+- `POST /execute`
+- `POST /stop`
+- `GET /health`
+- `GET /telemetry`
+- `GET /commands`
+
+DB path is under `storage/pyhub.db`.
+
+### agent
+
+- Streams 1 FPS camera frames to Gemini Live.
+- Executes tool calls to pyhub (`forward_cm`, `backward_cm`, `turn_deg`, `stop`).
+
+---
+
+## Troubleshooting
+
+### pyhub keeps waiting for hub
+
+- Press green button on LEGO hub.
+- Confirm `HUB_MAC` is correct.
+- Keep hub close to Pi.
+
+### agent says "Cannot reach pyhub"
+
+- Check pyhub logs.
+- Verify pyhub container is healthy.
+- Ensure `PYHUB_URL=http://localhost:8000`.
+
+### Larix can't connect
+
+- Ensure iPhone and Pi are on same LAN.
+- Use `live/stream` style path (app + stream).
+- Confirm port `1935` reachable.
+
+---
 
 ## Repo layout
 
 ```
 boost/
+  docker-compose.yml
+  infra/mediamtx/mediamtx.yml
   services/
-    agent/          # Gemini Live agent — vision + tool dispatch  ✅ done
-    pyhub/          # FastAPI + pylgbst — BLE motor control       ✅ done
-  docs/
-    runbook.md
-    calibration.md
+    agent/
+    pyhub/
+  storage/
 ```
-
----
-
-## pyhub
-
-FastAPI service that exposes the LEGO BOOST Move Hub over HTTP. The agent calls it to move the robot.
-
-### Setup
-
-```bash
-# Install uv (if not already)
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# 1. Install system Bluetooth stack (first time only)
-sudo apt-get install -y bluetooth bluez
-sudo systemctl enable --now bluetooth
-sudo usermod -aG bluetooth $USER   # re-login after
-
-# 2. Sync workspace deps (run from repo root once)
-cd /path/to/boost
-uv sync --all-packages
-
-# 3. Find hub MAC
-cd services/pyhub
-uv run python scan_hub.py          # press green button on hub first
-
-# 4. Create .env
-cp .env.example .env
-# Edit HUB_MAC to the address found above
-
-# 5. Verify connection
-uv run --env-file .env python test_connect.py
-```
-
-### Run
-
-```bash
-cd services/pyhub
-uv run --env-file .env uvicorn main:app --host 0.0.0.0 --port 8000
-```
-
-### Environment variables
-
-| Variable             | Default           | Description                          |
-|----------------------|-------------------|--------------------------------------|
-| `HUB_MAC`            | `AA:BB:CC:DD:EE:FF` | LEGO Move Hub Bluetooth MAC        |
-| `MOCK_HUB`           | `false`           | `true` = log-only, no BLE needed     |
-| `WATCHDOG_TIMEOUT_S` | `5`               | Auto-stop motors after N seconds idle|
-| `PORT`               | `8000`            | uvicorn port                         |
-
-### API
-
-| Method | Path        | Description                  |
-|--------|-------------|------------------------------|
-| POST   | `/execute`  | Run a motion primitive       |
-| POST   | `/stop`     | Emergency stop               |
-| GET    | `/health`   | Liveness + BLE status        |
-| GET    | `/telemetry`| Battery voltage              |
-
-**POST /execute**
-```json
-{
-  "command_id": "abc123",
-  "primitive": "forward_cm",
-  "args": { "distance_cm": 20, "speed": 0.5 }
-}
-```
-
-Primitives: `forward_cm`, `backward_cm`, `turn_deg`, `stop`
-
-**GET /health**
-```json
-{ "ok": true, "ble_connected": true, "mock": false }
-```
-
-### Motion calibration
-
-Edit `hub.py` constants to match your build:
-
-```python
-WHEEL_DIAMETER_CM = 5.4    # Vernie wheel (part 2515, 54 mm)
-TRACK_WIDTH_CM    = 12.0   # wheel center-to-center
-```
-
-See [`docs/calibration.md`](docs/calibration.md) for procedure.
-
-### RPi BLE troubleshooting
-
-| Problem | Fix |
-|---------|-----|
-| `hci0` not found | `sudo hciconfig hci0 reset` |
-| Permission denied | `sudo usermod -aG bluetooth $USER` + re-login |
-| Hub not found after reconnect | Wait 5 s (hub LED clears); press button to re-advertise |
-| BT + Wi-Fi interference (RPi 3) | Disable Wi-Fi or use USB BT 5.0 dongle |
-
----
-
-## agent
-
-Raw `google-genai` loop: captures camera frames at 1 fps, streams them to Gemini Live (text mode + vision), and dispatches tool calls to pyhub over HTTP.
-
-### Setup
-
-```bash
-cd services/agent
-cp .env.example .env
-# Set GOOGLE_API_KEY and optionally CAMERA_RTSP
-```
-
-### Run
-
-Start pyhub first, then:
-
-```bash
-cd services/agent
-uv run --env-file .env python agent.py
-```
-
-### Environment variables
-
-| Variable       | Default                  | Description                              |
-|----------------|--------------------------|------------------------------------------|
-| `GOOGLE_API_KEY` | —                      | Gemini API key (required)                |
-| `PYHUB_URL`    | `http://localhost:8000`  | pyhub service base URL                   |
-| `CAMERA_RTSP`  | *(unset)*                | RTSP stream URL; unset = local cam (0)   |
-
-### Tools exposed to Gemini
-
-| Tool          | Description                              |
-|---------------|------------------------------------------|
-| `forward_cm`  | Drive forward N cm (max 30)             |
-| `backward_cm` | Drive backward N cm (max 30)            |
-| `turn_deg`    | Turn in place ±90°                       |
-| `stop`        | Emergency stop                           |

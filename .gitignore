@@ -144,3 +144,7 @@ cython_debug/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Project runtime storage
+storage/*.db
+storage/*.db-*

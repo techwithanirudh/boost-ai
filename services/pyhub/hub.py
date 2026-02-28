@@ -29,6 +29,8 @@ TURN_SPEED  = 0.4
 # ── Config ─────────────────────────────────────────────────────────────────────
 HUB_MAC            = os.getenv("HUB_MAC", "AA:BB:CC:DD:EE:FF")
 WATCHDOG_TIMEOUT_S = float(os.getenv("WATCHDOG_TIMEOUT_S", "5"))
+HUB_CONNECT_TIMEOUT_S = float(os.getenv("HUB_CONNECT_TIMEOUT_S", "300"))
+HUB_CONNECT_MAX_BACKOFF_S = float(os.getenv("HUB_CONNECT_MAX_BACKOFF_S", "30"))
 MOCK_HUB           = os.getenv("MOCK_HUB", "false").lower() == "true"
 
 
@@ -55,23 +57,45 @@ class MockHub:
 
 
 # ── Connection ─────────────────────────────────────────────────────────────────
-def connect(retries: int = 10) -> MoveHub | MockHub:
+def connect() -> MoveHub | MockHub:
     if MOCK_HUB:
         return MockHub()
 
-    for attempt in range(retries):
+    started = time.monotonic()
+    attempt = 0
+    while True:
+        elapsed = time.monotonic() - started
+        remaining = HUB_CONNECT_TIMEOUT_S - elapsed
+        if remaining <= 0:
+            break
+
+        attempt += 1
         try:
-            log.info(f"BLE connect attempt {attempt + 1}/{retries} → {HUB_MAC}")
+            log.info(
+                "BLE connect attempt %s (elapsed %.0fs / %.0fs) → %s",
+                attempt,
+                elapsed,
+                HUB_CONNECT_TIMEOUT_S,
+                HUB_MAC,
+            )
             conn = get_connection_bleak(hub_mac=HUB_MAC)
             hub  = MoveHub(conn)
             log.info("Connected to Move Hub ✓")
             return hub
         except Exception as exc:
-            wait = min(2.0 * (2 ** attempt), 60.0)
-            log.warning(f"Connect failed: {exc}. Retry in {wait:.0f}s")
+            wait = min(2.0 * (2 ** (attempt - 1)), HUB_CONNECT_MAX_BACKOFF_S, max(0.5, remaining))
+            log.warning(
+                "Connect failed: %s. Retry in %.0fs (remaining %.0fs)",
+                exc,
+                wait,
+                remaining,
+            )
             time.sleep(wait)
 
-    raise RuntimeError(f"Could not connect to Move Hub at {HUB_MAC} after {retries} attempts")
+    raise RuntimeError(
+        f"Could not connect to Move Hub at {HUB_MAC} after {HUB_CONNECT_TIMEOUT_S:.0f}s "
+        f"and {attempt} attempts"
+    )
 
 
 # ── Primitives ─────────────────────────────────────────────────────────────────

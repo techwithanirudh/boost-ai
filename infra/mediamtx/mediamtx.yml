@@ -1,0 +1,11 @@
+# MediaMTX config for Larix RTMP publish -> RTSP read
+
+logLevel: info
+
+# No auth by default for local LAN use
+rtmpAddress: :1935
+rtspAddress: :8554
+
+# Accept any path, including app/stream style: /live/stream
+paths:
+  all_others:

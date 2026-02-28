@@ -1,0 +1,41 @@
+name: boost
+
+services:
+  mediamtx:
+    image: bluenviron/mediamtx:latest
+    container_name: mediamtx
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./infra/mediamtx/mediamtx.yml:/mediamtx.yml:ro
+
+  pyhub:
+    build:
+      context: .
+      dockerfile: services/pyhub/Dockerfile
+    container_name: pyhub
+    restart: unless-stopped
+    network_mode: host
+    env_file:
+      - services/pyhub/.env
+    environment:
+      DATABASE_URL: sqlite:////app/storage/pyhub.db
+    volumes:
+      - ./storage:/app/storage
+      - /var/run/dbus:/var/run/dbus
+    privileged: true
+
+  agent:
+    build:
+      context: .
+      dockerfile: services/agent/Dockerfile
+    container_name: agent
+    restart: unless-stopped
+    network_mode: host
+    env_file:
+      - services/agent/.env
+    depends_on:
+      - pyhub
+      - mediamtx
+    volumes:
+      - ./storage:/app/storage

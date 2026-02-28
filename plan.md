@@ -1,5 +1,64 @@
 # LEGO BOOST + Gemini Live — System Plan
 
+## Current Implementation (as of now)
+
+- Implemented services:
+  - `services/agent` (Gemini Live + camera + tool dispatch)
+  - `services/pyhub` (FastAPI + LEGO BOOST BLE control)
+- Runtime stack:
+  - `docker-compose.yml` starts `mediamtx`, `pyhub`, and `agent`
+  - iPhone Larix publishes RTMP (`/live/stream`) to MediaMTX
+  - Agent reads RTSP from MediaMTX (`rtsp://localhost:8554/live/stream`)
+- Data storage:
+  - `storage/pyhub.db` (sqlite), ignored by git
+- BLE connect behavior:
+  - `HUB_CONNECT_TIMEOUT_S=300` (5 min) with backoff
+
+Quick run:
+
+```bash
+docker compose up -d --build
+docker compose logs -f mediamtx pyhub agent
+```
+
+## Agent Control Loop (required behavior)
+
+The agent must behave like an embodied robot controller, not a chat assistant.
+
+### Robot-first system prompt contract
+
+- Identity: "You are the robot. You can move and stop using tools."
+- Allowed motion outputs: `forward_cm`, `backward_cm`, `turn_deg`, `stop`.
+- Motion limits per step:
+  - forward/backward: 10-30 cm per call
+  - turn: up to 90 degrees per call
+- Safety:
+  - if scene is unclear or obstacle risk exists, call `stop` first
+  - never chain long blind movement; always re-check after each step
+
+### Sense -> Think -> Act loop
+
+For every cycle:
+
+1. Move 10cm, capture video, and send to Gemini Live.
+3. Ask for next action from current mission state.
+4. Execute exactly one tool command (or `stop`).
+5. Wait for command result/ack from `pyhub`.
+6. Capture next video until command end.
+7. Repeat until mission complete or manual stop.
+
+### Runtime state machine
+
+- `idle` -> `running` -> `waiting_ack` -> `running`
+- Any error/unsafe condition -> `stopped`
+- User stop command -> `stopped`
+
+### Reliability rules
+
+- If model replies with plain text intent (for example, "move forward 20 cm"), agent should parse and execute the equivalent tool call.
+- Keep mission memory in app state (for example, "move forward until obstacle"), not only in chat history.
+- Log each loop step: frame tick, model decision, tool call, ack/error, resulting state.
+
 ## Reference Index
 
 | Technology | Docs | Package |
