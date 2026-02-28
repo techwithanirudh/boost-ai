@@ -1,6 +1,0 @@
-google-genai>=1.0
-httpx
-opencv-python-headless
-python-dotenv
-# For RPi Camera Module (optional, uncomment if using picamera2 in camera.py):
-# picamera2

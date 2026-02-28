@@ -33,32 +33,35 @@ FastAPI service that exposes the LEGO BOOST Move Hub over HTTP. The agent calls 
 ### Setup
 
 ```bash
-cd services/pyhub
+# Install uv (if not already)
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # 1. Install system Bluetooth stack (first time only)
 sudo apt-get install -y bluetooth bluez
 sudo systemctl enable --now bluetooth
 sudo usermod -aG bluetooth $USER   # re-login after
 
-# 2. Find hub MAC
-python scan_hub.py                 # press green button on hub first
+# 2. Sync workspace deps (run from repo root once)
+cd /path/to/boost
+uv sync --all-packages
 
-# 3. Create .env
+# 3. Find hub MAC
+cd services/pyhub
+uv run python scan_hub.py          # press green button on hub first
+
+# 4. Create .env
 cp .env.example .env
 # Edit HUB_MAC to the address found above
 
-# 4. Create venv + install
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
-
 # 5. Verify connection
-.venv/bin/python test_connect.py   # robot should nudge forward
+uv run --env-file .env python test_connect.py
 ```
 
 ### Run
 
 ```bash
-.venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000
+cd services/pyhub
+uv run --env-file .env uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
 ### Environment variables
@@ -125,10 +128,6 @@ Raw `google-genai` loop: captures camera frames at 1 fps, streams them to Gemini
 
 ```bash
 cd services/agent
-
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
-
 cp .env.example .env
 # Set GOOGLE_API_KEY and optionally CAMERA_RTSP
 ```
@@ -138,7 +137,8 @@ cp .env.example .env
 Start pyhub first, then:
 
 ```bash
-.venv/bin/python agent.py
+cd services/agent
+uv run --env-file .env python agent.py
 ```
 
 ### Environment variables

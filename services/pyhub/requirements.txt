@@ -1,6 +1,0 @@
-pylgbst[bleak] @ git+https://github.com/undera/pylgbst.git
-bleak==0.22.3
-fastapi[standard]==0.134.0
-uvicorn[standard]
-pydantic>=2
-python-dotenv

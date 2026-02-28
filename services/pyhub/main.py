@@ -1,55 +1,50 @@
 """
-main.py — pyhub-service FastAPI server.
+pyhub — FastAPI + pylgbst BLE motor control service.
 
-Endpoints:
-  POST /execute   — run a motion primitive
+  POST /execute   — run a motion primitive (logged to DB)
   POST /stop      — emergency stop
   GET  /health    — liveness + BLE status
-  GET  /telemetry — encoder / battery snapshot
+  GET  /telemetry — battery voltage
+  GET  /commands  — recent command log
 
 Run:
-  uvicorn main:app --host 0.0.0.0 --port 8000
-
-Env vars (see .env.example):
-  HUB_MAC, MOCK_HUB, WATCHDOG_TIMEOUT_S, PORT
+  uv run --env-file .env uvicorn main:app --host 0.0.0.0 --port 8000
 """
 
 import asyncio
+import json
 import logging
 import os
+import time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 
-from dotenv import load_dotenv
-
-load_dotenv()
-
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
+from sqlmodel import select
 
+from db import CommandLog, SessionDep, create_tables
 from hub import Watchdog, connect, forward_cm, backward_cm, turn_deg, stop
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
-log = logging.getLogger("pyhub-service")
+log = logging.getLogger("pyhub")
 
-# ── State ──────────────────────────────────────────────────────────────────────
-# Mutable list so Watchdog can always reference the current hub object
 _hub_ref: list = [None]
 _executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="hub")
 _watchdog = Watchdog(_hub_ref)
 
 
-# ── Lifespan ───────────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    create_tables()
     hub = connect()
     _hub_ref[0] = hub
     _watchdog.start()
     _watchdog.pet()
-    log.info("pyhub-service ready")
+    log.info("pyhub ready")
     yield
     _watchdog.stop()
     hub = _hub_ref[0]
@@ -58,13 +53,12 @@ async def lifespan(app: FastAPI):
             hub.switch_off()
         except Exception:
             hub.disconnect()
-    log.info("pyhub-service shutdown")
+    log.info("pyhub shutdown")
 
 
-app = FastAPI(title="pyhub-service", lifespan=lifespan)
+app = FastAPI(title="pyhub", lifespan=lifespan)
 
 
-# ── Helpers ────────────────────────────────────────────────────────────────────
 def _require_hub():
     hub = _hub_ref[0]
     if hub is None:
@@ -73,12 +67,10 @@ def _require_hub():
 
 
 async def _run_sync(fn, *args):
-    """Run a blocking hub call in the serial executor."""
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(_executor, fn, *args)
 
 
-# ── Schemas ────────────────────────────────────────────────────────────────────
 class ExecuteRequest(BaseModel):
     command_id: str
     primitive: str = Field(..., pattern="^(forward_cm|backward_cm|turn_deg|stop)$")
@@ -106,11 +98,13 @@ class TelemetryResponse(BaseModel):
     battery_voltage: float | None
 
 
-# ── Routes ─────────────────────────────────────────────────────────────────────
 @app.post("/execute", response_model=ExecuteResponse)
-async def execute(req: ExecuteRequest):
+async def execute(req: ExecuteRequest, db: SessionDep):
     hub = _require_hub()
     _watchdog.pet()
+
+    start = time.monotonic()
+    error: str | None = None
 
     def _run():
         match req.primitive:
@@ -122,14 +116,25 @@ async def execute(req: ExecuteRequest):
                 turn_deg(hub, float(req.args.get("angle_deg", 90)), float(req.args.get("speed", 0.4)))
             case "stop":
                 stop(hub)
-            case _:
-                raise ValueError(f"Unknown primitive: {req.primitive}")
 
     try:
         await _run_sync(_run)
     except Exception as exc:
-        log.error(f"Execute failed: {exc}")
-        raise HTTPException(status_code=500, detail=str(exc))
+        error = str(exc)
+        log.error("Execute failed: %s", exc)
+    finally:
+        db.add(CommandLog(
+            command_id=req.command_id,
+            primitive=req.primitive,
+            args=json.dumps(req.args),
+            ok=error is None,
+            error=error,
+            duration_ms=(time.monotonic() - start) * 1000,
+        ))
+        db.commit()
+
+    if error:
+        raise HTTPException(status_code=500, detail=error)
 
     return ExecuteResponse(command_id=req.command_id, accepted=True, primitive=req.primitive)
 
@@ -163,3 +168,10 @@ async def telemetry():
         except Exception:
             pass
     return TelemetryResponse(ble_connected=hub is not None, battery_voltage=voltage)
+
+
+@app.get("/commands", response_model=list[CommandLog])
+async def list_commands(db: SessionDep, limit: int = 50):
+    return db.exec(
+        select(CommandLog).order_by(CommandLog.created_at.desc()).limit(limit)
+    ).all()
