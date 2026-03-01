@@ -81,8 +81,33 @@ docker compose logs -f server hub
 Pi profile:
 
 ```bash
-DATABASE_URL='postgresql://<user>:<pass>@<host>/<db>?sslmode=require' docker compose -f docker-compose.pi.yml up -d --build
+DATABASE_URL='postgresql://<user>:<pass>@<host>/<db>?sslmode=require' docker compose -f docker-compose.prod.yml up -d --build
 ```
+
+## AI SDK Execute Route
+
+Server exposes a unified AI route:
+
+- `POST /v1/execute`
+
+Request body:
+
+```json
+{
+  "goal": "move forward until obstacle",
+  "observation": {
+    "scene": "clear floor ahead",
+    "depthSummary": "far",
+    "frameRef": "frame://latest"
+  },
+  "dryRun": false
+}
+```
+
+Behavior:
+- AI SDK generates one action with schema validation (`@boost/validators`)
+- Server dispatches one command to hub via `POST /motion/execute`
+- Response includes decision text and hub execution result
 
 ## Planning Docs
 

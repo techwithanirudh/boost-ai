@@ -1,0 +1,19 @@
+{
+  "name": "@boost/validators",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./src/index.ts"
+    },
+    "./*": {
+      "default": "./src/*.ts"
+    }
+  },
+  "dependencies": {
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@boost/config": "workspace:*",
+    "typescript": "catalog:"
+  }
+}

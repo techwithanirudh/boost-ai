@@ -1,7 +1,7 @@
 import os
 from typing import Any
 
-from .models import MotionCommand
+from .models import ExecuteMotionCommand, MotionCommand
 from .safety import Watchdog
 
 
@@ -19,7 +19,7 @@ class HubService:
             "watchdog_expired": self.watchdog.expired(),
         }
 
-    def _ok(self, action: str, payload: MotionCommand | None = None) -> dict[str, Any]:
+    def _ok(self, action: str, payload: ExecuteMotionCommand | None = None) -> dict[str, Any]:
         self.watchdog.pet()
         return {
             "ok": True,
@@ -31,17 +31,28 @@ class HubService:
             "error": None,
         }
 
+    def execute(self, payload: ExecuteMotionCommand) -> dict[str, Any]:
+        if payload.action == "stop":
+            return self._ok("stop", payload)
+
+        if payload.action == "turn_deg":
+            bounded = max(-90.0, min(90.0, payload.value))
+            return self._ok(payload.action, payload.model_copy(update={"value": bounded}))
+
+        bounded = max(5.0, min(30.0, payload.value))
+        return self._ok(payload.action, payload.model_copy(update={"value": bounded}))
+
     def forward(self, payload: MotionCommand) -> dict[str, Any]:
-        return self._ok("forward", payload)
+        return self.execute(ExecuteMotionCommand(action="forward_cm", value=payload.value, speed=payload.speed))
 
     def backward(self, payload: MotionCommand) -> dict[str, Any]:
-        return self._ok("backward", payload)
+        return self.execute(ExecuteMotionCommand(action="backward_cm", value=payload.value, speed=payload.speed))
 
     def turn(self, payload: MotionCommand) -> dict[str, Any]:
-        return self._ok("turn", payload)
+        return self.execute(ExecuteMotionCommand(action="turn_deg", value=payload.value, speed=payload.speed))
 
     def stop(self) -> dict[str, Any]:
-        return self._ok("stop")
+        return self.execute(ExecuteMotionCommand(action="stop", value=0.0, speed=self.default_speed, text="manual stop"))
 
     def emergency_stop(self) -> dict[str, Any]:
         return self._ok("emergency-stop")

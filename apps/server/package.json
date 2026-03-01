@@ -10,9 +10,13 @@
     "start": "bun run dist/index.mjs"
   },
   "dependencies": {
+    "@ai-sdk/google": "^3.0.34",
     "@boost/db": "workspace:*",
     "@boost/env": "workspace:*",
+    "@boost/validators": "workspace:*",
+    "ai": "^6.0.105",
     "dotenv": "catalog:",
+    "drizzle-orm": "^0.45.1",
     "hono": "^4.8.2",
     "zod": "catalog:"
   },

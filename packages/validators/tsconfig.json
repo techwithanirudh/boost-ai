@@ -1,0 +1,3 @@
+{
+  "extends": "@boost/config/tsconfig.base.json"
+}

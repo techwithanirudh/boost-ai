@@ -187,7 +187,7 @@ Fallback handling:
 - `AI_PROVIDER=google`
 - `AI_MODEL=`
 - `GOOGLE_API_KEY=`
-- `PYHUB_BASE_URL=http://hub:8000`
+- `HUB_BASE_URL=http://hub:8000`
 - `STEP_TIMEOUT_MS=15000`
 
 ### `apps/hub/.env`
