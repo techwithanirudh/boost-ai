@@ -4,6 +4,7 @@ import {
   updateSessionStatus,
 } from "@boost/db/queries/sessions";
 import { Hono } from "hono";
+import { streamSSE } from "hono/streaming";
 import { z } from "zod";
 import { hub } from "@/lib/hub";
 import { requireHub } from "@/lib/hub/ready";
@@ -13,6 +14,26 @@ import { runSession } from "@/services/orchestrator";
 const log = createLogger("sessions");
 
 export const sessions = new Hono();
+const sessionBodySchema = z
+  .object({ goal: z.string().min(1), id: z.string().optional() })
+  .strict();
+
+async function resolveSessionId(goal: string, id?: string): Promise<string> {
+  if (id) {
+    const existing = await getSession(id);
+    if (!existing) {
+      const created = await createSession({ id, goal });
+      return created.id;
+    }
+    if (existing.status === "completed") {
+      await updateSessionStatus(id, "running");
+    }
+    return id;
+  }
+
+  const session = await createSession({ id: crypto.randomUUID(), goal });
+  return session.id;
+}
 
 /**
  * Create a new session OR continue an existing one (follow-up goal).
@@ -31,34 +52,14 @@ sessions.post("/", async (c) => {
   }
 
   const body = await c.req.json().catch(() => ({}));
-  const parsed = z
-    .object({ goal: z.string().min(1), id: z.string().optional() })
-    .safeParse(body);
+  const parsed = sessionBodySchema.safeParse(body);
 
   if (!parsed.success) {
     return c.json({ ok: false, data: null, error: parsed.error.issues }, 400);
   }
 
   const { goal, id } = parsed.data;
-
-  let sessionId: string;
-
-  if (id) {
-    const existing = await getSession(id);
-    if (!existing) {
-      log.warn({ sessionId: id, goal }, "session not found for follow-up");
-      return c.json({ ok: false, data: null, error: "session_not_found" }, 404);
-    }
-    if (existing.status === "completed") {
-      await updateSessionStatus(id, "running");
-    }
-    sessionId = id;
-    log.info({ sessionId, goal }, "session resumed");
-  } else {
-    const session = await createSession({ id: crypto.randomUUID(), goal });
-    sessionId = session.id;
-    log.info({ sessionId, goal }, "session started");
-  }
+  const sessionId = await resolveSessionId(goal, id);
 
   const started = Date.now();
 
@@ -87,6 +88,61 @@ sessions.post("/", async (c) => {
       500
     );
   }
+});
+
+sessions.post("/stream", async (c) => {
+  const notReady = await requireHub(c);
+  if (notReady) {
+    return notReady;
+  }
+
+  const body = await c.req.json().catch(() => ({}));
+  const parsed = sessionBodySchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ ok: false, data: null, error: parsed.error.issues }, 400);
+  }
+
+  const { goal, id } = parsed.data;
+  const sessionId = await resolveSessionId(goal, id);
+
+  return streamSSE(c, async (stream) => {
+    const write = async (event: string, data: unknown) => {
+      await stream.writeSSE({ event, data: JSON.stringify(data) });
+    };
+
+    await write("session_started", { sessionId, goal });
+    const heartbeat = setInterval(() => {
+      write("heartbeat", { ts: Date.now() }).catch(() => undefined);
+    }, 1000);
+
+    const started = Date.now();
+    try {
+      const result = await runSession(sessionId, goal);
+      const updated = await getSession(sessionId);
+      const status = updated?.status ?? "running";
+      const steps = result.steps.length;
+      const ms = Date.now() - started;
+      log.info(
+        { sessionId, status, steps, ms },
+        `session ${status} — ${steps} step${steps !== 1 ? "s" : ""} in ${ms}ms`
+      );
+      await write("session_result", {
+        sessionId,
+        status,
+        text: result.text,
+        steps,
+      });
+      await write("session_complete", { sessionId, status });
+    } catch (error) {
+      const ms = Date.now() - started;
+      const detail = `session_failed: ${String(error)}`;
+      log.error({ sessionId, ms, err: String(error) }, "session failed");
+      await write("session_error", { sessionId, error: detail });
+    } finally {
+      clearInterval(heartbeat);
+      await stream.close();
+    }
+  });
 });
 
 sessions.get("/:id", async (c) => {
