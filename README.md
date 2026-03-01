@@ -67,6 +67,23 @@ boost/
 - `bun run db:migrate`: Run database migrations
 - `bun run db:studio`: Open database studio UI
 
+## Hub Service Scaffold
+
+`apps/hub` is the new FastAPI service scaffold for LEGO hub control.
+
+Run API + hub via Docker:
+
+```bash
+DATABASE_URL='postgresql://<user>:<pass>@<host>/<db>?sslmode=require' docker compose up -d --build
+docker compose logs -f server hub
+```
+
+Pi profile:
+
+```bash
+DATABASE_URL='postgresql://<user>:<pass>@<host>/<db>?sslmode=require' docker compose -f docker-compose.pi.yml up -d --build
+```
+
 ## Planning Docs
 
 - Current refactor execution plan: `plan.md`

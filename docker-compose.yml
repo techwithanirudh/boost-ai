@@ -1,0 +1,32 @@
+services:
+  server:
+    container_name: server
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3001}
+      DATABASE_URL: ${DATABASE_URL}
+      PYHUB_BASE_URL: ${PYHUB_BASE_URL:-http://hub:8000}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - hub
+    restart: unless-stopped
+
+  hub:
+    container_name: hub
+    build:
+      context: .
+      dockerfile: apps/hub/Dockerfile
+    environment:
+      PORT: ${HUB_PORT:-8000}
+      HUB_MAC: ${HUB_MAC:-}
+      HUB_CONNECT_TIMEOUT_S: ${HUB_CONNECT_TIMEOUT_S:-300}
+      WATCHDOG_TIMEOUT_S: ${WATCHDOG_TIMEOUT_S:-5}
+      MOTOR_DEFAULT_SPEED: ${MOTOR_DEFAULT_SPEED:-0.5}
+      COMMAND_TIMEOUT_S: ${COMMAND_TIMEOUT_S:-10}
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
