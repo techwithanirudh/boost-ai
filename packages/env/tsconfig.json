@@ -1,3 +1,6 @@
 {
-  "extends": "@boost/config/tsconfig.base.json"
+  "extends": "@boost/config/tsconfig.base.json",
+  "compilerOptions": {
+    "strictNullChecks": true
+  }
 }

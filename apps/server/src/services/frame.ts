@@ -1,12 +1,6 @@
 import { env } from "@boost/env/server";
 import ky, { HTTPError } from "ky";
 
-/**
- * Fetch the latest JPEG snapshot from MediaMTX and return it as a base64
- * data URL suitable for passing directly as an AI SDK image part.
- *
- * MediaMTX snapshot endpoint: GET {MEDIAMTX_BASE_URL}/{MEDIAMTX_STREAM_PATH}/get-jpeg-snapshot
- */
 export async function fetchLatestFrame(): Promise<string> {
   const url = `${env.MEDIAMTX_BASE_URL}/${env.MEDIAMTX_STREAM_PATH}/get-jpeg-snapshot`;
 

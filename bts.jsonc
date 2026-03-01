@@ -19,7 +19,10 @@
   "backend": "hono",
   "runtime": "bun",
   "frontend": ["tanstack-router"],
-  "addons": ["turborepo"],
+  "addons": [
+		"turborepo",
+		"ultracite"
+	],
   "examples": [],
   "auth": "none",
   "payments": "none",

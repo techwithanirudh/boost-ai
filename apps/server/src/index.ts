@@ -11,13 +11,7 @@ import { sessions } from "./routes/sessions";
 const app = new Hono();
 
 app.use(logger());
-app.use(
-  "/*",
-  cors({
-    origin: env.CORS_ORIGIN,
-    allowMethods: ["GET", "POST", "OPTIONS"],
-  }),
-);
+app.use("/*", cors({ origin: env.CORS_ORIGIN, allowMethods: ["GET", "POST", "OPTIONS"] }));
 
 app.get("/", (c) => c.text("OK"));
 app.route("/v1/health", health);

@@ -1,29 +1,32 @@
-import { stepRequestSchema } from "@boost/validators";
 import { Hono } from "hono";
-import { runOrchestrator } from "@/services/orchestrator";
+import { z } from "zod";
+import { runSession } from "@/services/orchestrator";
 
 export const execute = new Hono();
 
+/**
+ * Stateless one-shot execution — creates a throwaway session and runs the
+ * orchestrator immediately. Useful for quick CLI / testing without managing
+ * session state.
+ *
+ * POST /v1/execute
+ * Body: { goal: string }
+ */
 execute.post("/", async (c) => {
   const body = await c.req.json().catch(() => ({}));
-  const sessionId = crypto.randomUUID();
-  const parsed = stepRequestSchema.safeParse({ ...body, sessionId, missionId: sessionId });
+  const parsed = z.object({ goal: z.string().min(1) }).safeParse(body);
 
   if (!parsed.success) {
     return c.json({ ok: false, data: null, error: parsed.error.issues }, 400);
   }
 
-  if (parsed.data.dryRun) {
-    return c.json({ ok: true, data: { dryRun: true }, error: null });
-  }
-
   try {
-    const traceId = crypto.randomUUID();
-    const result = await runOrchestrator(sessionId, parsed.data);
+    const sessionId = crypto.randomUUID();
+    const result = await runSession(sessionId, parsed.data.goal);
 
     return c.json({
       ok: true,
-      data: { traceId, text: result.text, steps: result.steps.length },
+      data: { sessionId, text: result.text, steps: result.steps.length },
       error: null,
     });
   } catch (error) {

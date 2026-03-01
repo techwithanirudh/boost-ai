@@ -17,14 +17,16 @@
   "scripts": {
     "dev": "turbo dev",
     "build": "turbo build",
-    "check-types": "turbo check-types",
+    "typecheck": "turbo typecheck",
     "dev:native": "turbo -F native dev",
     "dev:web": "turbo -F web dev",
     "dev:server": "turbo -F server dev",
     "db:push": "turbo -F @boost/db db:push",
     "db:studio": "turbo -F @boost/db db:studio",
     "db:generate": "turbo -F @boost/db db:generate",
-    "db:migrate": "turbo -F @boost/db db:migrate"
+    "db:migrate": "turbo -F @boost/db db:migrate",
+    "check": "ultracite check",
+    "fix": "ultracite fix"
   },
   "dependencies": {
     "@boost/env": "workspace:*",
@@ -35,7 +37,9 @@
     "@boost/config": "workspace:*",
     "@types/bun": "catalog:",
     "turbo": "^2.6.3",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "ultracite": "7.2.4",
+    "@biomejs/biome": "2.4.0"
   },
   "packageManager": "bun@1.3.10"
 }
