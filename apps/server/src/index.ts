@@ -33,17 +33,12 @@ async function waitForHubReady(): Promise<void> {
   for (;;) {
     attempt++;
     const h = await hub.getHealth();
-    if (h.ok) {
-      log.info({ attempt, ms: Date.now() - started }, "Hub ready");
+    if (h.ok && h.data?.connected) {
+      log.info({ attempt, ms: Date.now() - started }, "Hub ready — BLE connected");
       return;
     }
-    const elapsed = Date.now() - started;
-    log.warn({ attempt, elapsed, error: h.error }, "Hub not ready, retrying");
-    if (elapsed > config.hub.timeoutMs) {
-      throw new Error(
-        `hub_not_ready_within_timeout: ${config.hub.timeoutMs}ms`
-      );
-    }
+    const reason = !h.ok ? h.error : "hub BLE not connected yet";
+    log.warn({ attempt, elapsed: Date.now() - started, reason }, "Hub not ready, retrying");
     await new Promise<void>((resolve) =>
       setTimeout(resolve, config.hub.pollIntervalMs)
     );

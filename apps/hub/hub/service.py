@@ -1,5 +1,6 @@
 import logging
 import os
+import time
 from typing import Any
 
 from pylgbst import get_connection_bleak
@@ -20,6 +21,7 @@ class HubService:
         self.connected = False
         self._hub: MoveHub | None = None
         self._mac: str | None = os.getenv("HUB_MAC") or None
+        self._stop = False
         self.watchdog = Watchdog(timeout_s=5.0)
 
     # ------------------------------------------------------------------
@@ -27,22 +29,29 @@ class HubService:
     # ------------------------------------------------------------------
 
     def connect(self) -> None:
-        """Blocking BLE connect — run in a thread from the lifespan handler."""
+        """Blocking BLE connect with retry, runs in a thread."""
         label = f"[{self._mac}]" if self._mac else '(name="Move Hub")'
-        logger.info("Connecting to LEGO Boost hub %s …", label)
-        try:
-            conn = get_connection_bleak(
-                hub_mac=self._mac,
-                hub_name=None if self._mac else "Move Hub",
-            )
-            self._hub = MoveHub(conn)
-            self.connected = True
-            logger.info("Connected to LEGO Boost hub %s", label)
-        except Exception as exc:
-            logger.error("BLE connect failed: %s", exc)
-            self.connected = False
+        attempt = 0
+        while not self._stop:
+            attempt += 1
+            logger.info("Connecting to LEGO Boost hub %s (attempt %d) …", label, attempt)
+            try:
+                conn = get_connection_bleak(
+                    hub_mac=self._mac,
+                    hub_name=None if self._mac else "Move Hub",
+                )
+                self._hub = MoveHub(conn)
+                self.connected = True
+                logger.info("Connected to LEGO Boost hub %s", label)
+                return
+            except Exception as exc:
+                logger.error("BLE connect failed: %s — retrying in 5s", exc)
+                self.connected = False
+                self._hub = None
+                time.sleep(5)
 
     def disconnect(self) -> None:
+        self._stop = True
         if self._hub:
             try:
                 self._hub.disconnect()
