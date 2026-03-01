@@ -70,7 +70,7 @@ class HubService:
 
         hub = self._hub
         action = payload.action
-        speed = payload.speed
+        speed = self._normalized_speed(payload.speed)
 
         try:
             if action == "stop":
@@ -80,20 +80,25 @@ class HubService:
                 dist = max(5.0, min(30.0, payload.value))
                 secs = dist / (_CM_PER_SEC_AT_FULL * speed)
                 logger.info("forward %.1f cm → %.2f s @ speed=%.2f", dist, secs, speed)
-                hub.motor_AB.timed(secs, speed, speed)
+                hub.motor_AB.timed(secs, speed, speed, wait_complete=True)
 
             elif action == "backward_cm":
                 dist = max(5.0, min(30.0, payload.value))
                 secs = dist / (_CM_PER_SEC_AT_FULL * speed)
                 logger.info("backward %.1f cm → %.2f s @ speed=%.2f", dist, secs, speed)
-                hub.motor_AB.timed(secs, -speed, -speed)
+                hub.motor_AB.timed(secs, -speed, -speed, wait_complete=True)
 
             elif action == "turn_deg":
                 deg = max(-90.0, min(90.0, payload.value))
                 secs = abs(deg) / (_DEG_PER_SEC_AT_FULL * speed)
                 direction = 1.0 if deg >= 0 else -1.0
                 logger.info("turn %.1f° → %.2f s @ speed=%.2f", deg, secs, speed)
-                hub.motor_AB.timed(secs, direction * speed, -direction * speed)
+                hub.motor_AB.timed(
+                    secs,
+                    direction * speed,
+                    -direction * speed,
+                    wait_complete=True,
+                )
 
             else:
                 return self._err(f"unknown_action: {action}")
@@ -162,3 +167,6 @@ class HubService:
         if distance_inches < 0:
             return
         self._distance = round(distance_inches * 2.54, 1)
+
+    def _normalized_speed(self, speed: float) -> float:
+        return max(0.05, min(1.0, abs(speed)))
