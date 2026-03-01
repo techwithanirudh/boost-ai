@@ -4,6 +4,8 @@ import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
+const api = process.env.VITE_API_URL ?? "http://localhost:3000";
+
 export default defineConfig({
   plugins: [tailwindcss(), tanstackRouter({}), react()],
   resolve: {
@@ -13,6 +15,15 @@ export default defineConfig({
   },
   envDir: path.resolve(import.meta.dirname, "../../"),
   server: {
+    host: true,
     port: 3001,
+    proxy: {
+      "/api": {
+        target: api,
+        changeOrigin: true,
+        // biome-ignore lint/performance/useTopLevelRegex: this is more readable for this specific case
+        rewrite: (path) => path.replace(/^\/api/, ""),
+      },
+    },
   },
 });

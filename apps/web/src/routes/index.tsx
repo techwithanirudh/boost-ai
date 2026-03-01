@@ -131,7 +131,7 @@ function ControlPanel() {
   };
 
   return (
-    <main className="mx-auto max-w-2xl space-y-4 px-4 py-6">
+    <main className="space-y-4 px-4 py-6">
       {/* ── Header status bar ── */}
       <div className="flex items-center justify-between">
         <span className="font-mono text-sm uppercase tracking-widest">
