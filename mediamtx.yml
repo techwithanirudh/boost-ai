@@ -16,12 +16,12 @@ rtspAddress: :8554
 hls: true
 hlsAddress: :8888
 
-# Disable unused protocols to reduce attack surface
-rtmp: false
+# RTMP – Larix/OBS pushes to rtmp://<host>:1935/live/stream
+rtmp: true
+rtmpAddress: :1935
 srt: false
 webrtc: false
 
 paths:
-  cam:
-    # Accept any publisher; restrict in production with publishUser/publishPass
+  live/stream:
     source: publisher

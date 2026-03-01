@@ -1,11 +1,31 @@
+import asyncio
+import logging
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+from dotenv import load_dotenv
 from fastapi import FastAPI
 
 from hub.models import ExecuteMotionCommand
 from hub.service import HubService
 
-app = FastAPI(title="boost-hub", version="0.1.0")
+# Load root .env (boost/.env) so HUB_MAC etc. are available
+load_dotenv(Path(__file__).parent.parent.parent / ".env")
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)-8s %(name)s - %(message)s",
+)
+
 service = HubService()
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    asyncio.get_event_loop().run_in_executor(None, service.connect)
+    yield
+    await asyncio.get_event_loop().run_in_executor(None, service.disconnect)
+
+app = FastAPI(title="boost-hub", version="0.1.0", lifespan=lifespan)
 
 @app.get("/health")
 def health() -> dict:

@@ -6,8 +6,8 @@
     "build": "tsdown",
     "typecheck": "tsc -b",
     "compile": "bun build --compile --minify --sourcemap --bytecode ./src/index.ts --outfile server",
-    "dev": "bun run --hot src/index.ts",
-    "start": "bun run dist/index.mjs"
+    "dev": "bun run --env-file ../../.env --hot src/index.ts",
+    "start": "bun run --env-file ../../.env dist/index.mjs"
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.34",
@@ -16,7 +16,6 @@
     "@boost/validators": "workspace:*",
     "ai": "^6.0.105",
     "ai-retry": "^1.2.0",
-    "dotenv": "catalog:",
     "drizzle-orm": "^0.45.1",
     "hono": "^4.8.2",
     "ky": "^1.7.5",
