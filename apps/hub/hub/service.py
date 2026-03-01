@@ -160,7 +160,23 @@ class HubService:
         except Exception as exc:
             logger.warning("Distance sensor subscribe failed: %s", exc)
 
-    def _on_color_distance_update(self, _color: int, distance_inches: float) -> None:
+    def _on_color_distance_update(self, *values: Any) -> None:
+        if not values:
+            return
+
+        distance_inches: float | None = None
+        if len(values) >= 2 and isinstance(values[1], (int, float)):
+            distance_inches = float(values[1])
+        elif isinstance(values[0], (int, float)):
+            distance_inches = float(values[0])
+
+        if distance_inches is None:
+            return
+
+        # Ignore invalid/sentinel payloads (e.g. 0xFF)
+        if distance_inches >= 255:
+            return
+
         self._update_distance_cm(distance_inches)
 
     def _update_distance_cm(self, distance_inches: float) -> None:
