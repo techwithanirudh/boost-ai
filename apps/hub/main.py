@@ -21,8 +21,7 @@ service = HubService()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Block until BLE connects — uvicorn won't accept requests until hub is ready.
-    await asyncio.get_event_loop().run_in_executor(None, service.connect)
+    asyncio.get_event_loop().run_in_executor(None, service.connect)
     yield
     await asyncio.get_event_loop().run_in_executor(None, service.disconnect)
 
