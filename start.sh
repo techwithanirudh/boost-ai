@@ -17,9 +17,11 @@ die()   { echo -e "${BOLD}${RED}[boost]${RESET} $*" >&2; exit 1; }
 # prefix <label> <colour> <cmd...>
 prefix() {
   local label="$1" colour="$2"; shift 2
-  "$@" 2>&1 | while IFS= read -r line; do
-    echo -e "${colour}[${label}]${RESET} ${line}"
-  done &
+  "$@" > >(
+    while IFS= read -r line; do
+      echo -e "${colour}[${label}]${RESET} ${line}"
+    done
+  ) 2>&1 &
 }
 
 # ── preflight checks ─────────────────────────────────────────────────────────
@@ -39,13 +41,29 @@ fi
 
 # ── cleanup on exit ───────────────────────────────────────────────────────────
 PIDS=()
+SHUTDOWN_DONE=0
 cleanup() {
+  [[ "$SHUTDOWN_DONE" -eq 1 ]] && return
+  SHUTDOWN_DONE=1
+
   echo ""
   info "Shutting down…"
-  for pid in "${PIDS[@]}"; do
-    kill "$pid" 2>/dev/null || true
+  for pid in "${PIDS[@]:-}"; do
+    kill -TERM "$pid" 2>/dev/null || true
   done
-  wait 2>/dev/null
+
+  local deadline=$((SECONDS + 5))
+  for pid in "${PIDS[@]:-}"; do
+    while kill -0 "$pid" 2>/dev/null; do
+      if (( SECONDS >= deadline )); then
+        kill -KILL "$pid" 2>/dev/null || true
+        break
+      fi
+      sleep 0.1
+    done
+  done
+
+  wait 2>/dev/null || true
   info "Done."
 }
 trap cleanup EXIT INT TERM

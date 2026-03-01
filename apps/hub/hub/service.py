@@ -36,7 +36,15 @@ class HubService:
                     hub_mac=self._mac,
                     hub_name=None if self._mac else "Move Hub",
                 )
-                self._hub = MoveHub(conn)
+                hub = MoveHub(conn)
+                if self._stop:
+                    try:
+                        hub.disconnect()
+                    except Exception:
+                        pass
+                    return
+
+                self._hub = hub
                 self.connected = True
                 self._attach_distance_sensor()
                 logger.info("Connected to LEGO Boost hub %s", label)
