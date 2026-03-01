@@ -527,9 +527,8 @@ description = "Python library to interact with LEGO PoweredUp devices (Lego BOOS
 optional = false
 python-versions = "*"
 groups = ["main"]
-files = [
-    {file = "pylgbst-1.3.0.tar.gz", hash = "sha256:42720acfa5347ff6ff800850fcda9614d4256acedccca183aabee6fe23de71bb"},
-]
+files = []
+develop = false
 
 [package.dependencies]
 bleak = {version = "*", optional = true, markers = "extra == \"bleak\""}
@@ -540,6 +539,12 @@ bluepy = ["bluepy"]
 gatt = ["dbus", "gatt", "gi"]
 gattlib = ["gattlib"]
 pygatt = ["pexpect", "pygatt"]
+
+[package.source]
+type = "git"
+url = "https://github.com/undera/pylgbst.git"
+reference = "HEAD"
+resolved_reference = "71dfc630b54ba3a966e4b7a144344465a65dc138"
 
 [[package]]
 name = "pyobjc-core"
@@ -1462,4 +1467,4 @@ all = ["winrt-Windows.Foundation.Collections[all] (>=3.2.1.0,<3.3.0.0)", "winrt-
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.11"
-content-hash = "1444891cd1dc5e95616e46ef8a89866c714ebcefa82a703dd0e1ccabda2985ba"
+content-hash = "859277b95eadeb70e8e60e5649da908bce1e7bdf83002a8c42259f21c97d09d1"
