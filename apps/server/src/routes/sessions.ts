@@ -6,6 +6,7 @@ import {
 import { Hono } from "hono";
 import { z } from "zod";
 import { hub } from "@/lib/hub";
+import { requireHub } from "@/lib/hub/ready";
 import { createLogger } from "@/lib/logger";
 import { runSession } from "@/services/orchestrator";
 
@@ -24,6 +25,11 @@ export const sessions = new Hono();
  *   (allows follow-up missions after the previous one completes).
  */
 sessions.post("/", async (c) => {
+  const notReady = await requireHub(c);
+  if (notReady) {
+    return notReady;
+  }
+
   const body = await c.req.json().catch(() => ({}));
   const parsed = z
     .object({ goal: z.string().min(1), id: z.string().optional() })
@@ -75,10 +81,7 @@ sessions.post("/", async (c) => {
     });
   } catch (error) {
     const ms = Date.now() - started;
-    log.error(
-      { sessionId, ms, err: String(error) },
-      "session failed"
-    );
+    log.error({ sessionId, ms, err: String(error) }, "session failed");
     return c.json(
       { ok: false, data: null, error: `session_failed: ${String(error)}` },
       500

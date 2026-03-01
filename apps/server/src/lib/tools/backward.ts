@@ -19,12 +19,23 @@ export const backwardTool = tool({
       .min(0)
       .max(1)
       .default(0.5)
-      .describe("Motor speed from 0.0 (slowest) to 1.0 (fastest). Default 0.5."),
-    text: z.string().min(1).max(500).describe("Brief rationale for this decision (shown in logs)."),
+      .describe(
+        "Motor speed from 0.0 (slowest) to 1.0 (fastest). Default 0.5."
+      ),
+    text: z
+      .string()
+      .min(1)
+      .max(500)
+      .describe("Brief rationale for this decision (shown in logs)."),
   }),
   execute: async ({ value, speed, text }) => {
     log.info({ value, speed, text }, `backward ${value}cm`);
-    const result = await hub.executeAction({ action: "backward_cm", value, speed, text });
+    const result = await hub.executeAction({
+      action: "backward_cm",
+      value,
+      speed,
+      text,
+    });
     if (!result.ok) {
       log.error({ error: result.error }, "backward failed");
     }

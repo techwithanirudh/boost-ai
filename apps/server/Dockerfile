@@ -5,12 +5,14 @@ WORKDIR /app
 
 COPY package.json bun.lock bts.jsonc turbo.json tsconfig.json ./
 COPY apps/server/package.json                 apps/server/
+COPY apps/web/package.json                    apps/web/
+COPY apps/hub/package.json                    apps/hub/
 COPY packages/config/package.json             packages/config/
 COPY packages/db/package.json                 packages/db/
 COPY packages/env/package.json                packages/env/
 COPY packages/validators/package.json         packages/validators/
 
-RUN bun install --frozen-lockfile
+RUN bun install --frozen-lockfile --ignore-scripts
 
 FROM deps AS builder
 WORKDIR /app
@@ -18,7 +20,7 @@ WORKDIR /app
 COPY packages packages
 COPY apps/server apps/server
 
-RUN bun --cwd apps/server run compile
+RUN bun run --cwd apps/server compile
 
 FROM debian:bookworm-slim AS runtime
 WORKDIR /app

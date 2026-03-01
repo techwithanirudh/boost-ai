@@ -1,18 +1,16 @@
 import { Hono } from "hono";
 import { z } from "zod";
+import { requireHub } from "@/lib/hub/ready";
 import { runSession } from "@/services/orchestrator";
 
 export const execute = new Hono();
 
-/**
- * Stateless one-shot execution — creates a throwaway session and runs the
- * orchestrator immediately. Useful for quick CLI / testing without managing
- * session state.
- *
- * POST /v1/execute
- * Body: { goal: string }
- */
 execute.post("/", async (c) => {
+  const notReady = await requireHub(c);
+  if (notReady) {
+    return notReady;
+  }
+
   const body = await c.req.json().catch(() => ({}));
   const parsed = z.object({ goal: z.string().min(1) }).safeParse(body);
 
