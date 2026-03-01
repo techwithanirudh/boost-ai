@@ -1,10 +1,10 @@
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { createOpenAI } from "@ai-sdk/openai";
 import { env } from "@boost/env/server";
 import { customProvider, type Provider } from "ai";
 import { createRetryable } from "ai-retry";
 
-const google = createGoogleGenerativeAI({
-  apiKey: env.GOOGLE_GENERATIVE_AI_API_KEY,
+const openai = createOpenAI({
+  apiKey: env.OPENAI_API_KEY,
 });
 
 const onModelError = (ctx: {
@@ -17,8 +17,8 @@ const onModelError = (ctx: {
 };
 
 const chatModel = createRetryable({
-  model: google.languageModel("gemini-2.5-flash"),
-  retries: [google.languageModel("gemini-2.0-flash")],
+  model: openai.languageModel("gpt-5.2"),
+  retries: [openai.languageModel("gpt-5-mini")],
   onError: onModelError,
 });
 

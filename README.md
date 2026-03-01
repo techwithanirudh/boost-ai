@@ -66,7 +66,7 @@ Fill in `.env`:
 | Variable | Description |
 |---|---|
 | `DATABASE_URL` | Neon/Postgres connection string |
-| `GOOGLE_GENERATIVE_AI_API_KEY` | Gemini API key — [aistudio.google.com](https://aistudio.google.com) |
+| `OPENAI_API_KEY` | Gemini API key — [aistudio.google.com](https://aistudio.google.com) |
 | `HUB_MAC` | BLE MAC of your LEGO hub (leave empty for auto-discover) |
 | `VITE_API_URL` | Server URL reachable from your browser (e.g. `http://192.168.0.123:3000`) |
 | `VITE_MEDIAMTX_URL` | MediaMTX WebRTC URL reachable from your browser (e.g. `http://192.168.0.123:8889`) |
