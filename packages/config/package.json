@@ -7,9 +7,6 @@
     ".": {
       "default": "./src/index.ts"
     },
-    "./ai": {
-      "default": "./src/ai.ts"
-    },
     "./tsconfig.base.json": "./tsconfig.base.json"
   }
 }
