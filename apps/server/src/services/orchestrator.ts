@@ -45,6 +45,14 @@ export async function runSession(
     model: provider.languageModel("chat-model"),
     instructions: systemPrompt(goal),
     toolChoice: "required",
+    providerOptions: {
+      openai: {
+        parallelToolCalls: true,
+        reasoningEffort: "minimal",
+        textVerbosity: 'low'
+        // ...
+      },
+    },
     tools,
     stopWhen: [stepCountIs(1)],
   });
