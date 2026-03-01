@@ -25,7 +25,7 @@ RUN bun run --cwd apps/server compile
 FROM debian:bookworm-slim AS runtime
 WORKDIR /app
 
-RUN adduser --system --uid 1001 app
+RUN addgroup --system app && adduser --system --uid 1001 --ingroup app app
 
 COPY --from=builder /app/apps/server/server ./server
 RUN chmod +x server && chown app:app server
