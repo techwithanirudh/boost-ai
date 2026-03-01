@@ -1,22 +1,65 @@
 import { createSession, getSession, updateSessionStatus } from "@boost/db/queries/sessions";
-import { stepRequestSchema } from "@boost/validators";
 import { Hono } from "hono";
 import { z } from "zod";
 import { hub } from "@/lib/hub";
-import { runOrchestrator } from "@/services/orchestrator";
+import { runSession } from "@/services/orchestrator";
 
 export const sessions = new Hono();
 
+/**
+ * Create a new session OR continue an existing one (follow-up goal).
+ *
+ * POST /v1/sessions
+ * Body: { goal: string, id?: string }
+ *
+ * - No id → new session is created, orchestrator runs immediately.
+ * - id provided → loads existing session, re-runs orchestrator with the goal
+ *   (allows follow-up missions after the previous one completes).
+ */
 sessions.post("/", async (c) => {
   const body = await c.req.json().catch(() => ({}));
-  const parsed = z.object({ goal: z.string().min(1) }).safeParse(body);
+  const parsed = z
+    .object({ goal: z.string().min(1), id: z.string().optional() })
+    .safeParse(body);
 
   if (!parsed.success) {
     return c.json({ ok: false, data: null, error: parsed.error.issues }, 400);
   }
 
-  const session = await createSession({ id: crypto.randomUUID(), goal: parsed.data.goal });
-  return c.json({ ok: true, data: session, error: null }, 201);
+  const { goal, id } = parsed.data;
+
+  let sessionId: string;
+
+  if (id) {
+    const existing = await getSession(id);
+    if (!existing) return c.json({ ok: false, data: null, error: "session_not_found" }, 404);
+    // Re-open a completed session so the follow-up can continue
+    if (existing.status === "completed") {
+      await updateSessionStatus(id, "running");
+    }
+    sessionId = id;
+  } else {
+    const session = await createSession({ id: crypto.randomUUID(), goal });
+    sessionId = session.id;
+  }
+
+  try {
+    const result = await runSession(sessionId, goal);
+    const updated = await getSession(sessionId);
+
+    return c.json({
+      ok: true,
+      data: {
+        sessionId,
+        status: updated?.status ?? "running",
+        text: result.text,
+        steps: result.steps.length,
+      },
+      error: null,
+    });
+  } catch (error) {
+    return c.json({ ok: false, data: null, error: `session_failed: ${String(error)}` }, 500);
+  }
 });
 
 sessions.get("/:id", async (c) => {
@@ -25,50 +68,9 @@ sessions.get("/:id", async (c) => {
   return c.json({ ok: true, data: session, error: null });
 });
 
-sessions.post("/:id/run", async (c) => {
-  const sessionId = c.req.param("id");
-  const session = await getSession(sessionId);
-
-  if (!session) return c.json({ ok: false, data: null, error: "session_not_found" }, 404);
-  if (session.status !== "running") {
-    return c.json({ ok: false, data: null, error: `session_${session.status}` }, 409);
-  }
-
-  const body = await c.req.json().catch(() => ({}));
-  const parsed = stepRequestSchema.safeParse({
-    ...body,
-    missionId: sessionId,
-    sessionId,
-    goal: body.goal ?? session.goal,
-  });
-
-  if (!parsed.success) {
-    return c.json({ ok: false, data: null, error: parsed.error.issues }, 400);
-  }
-
-  if (parsed.data.dryRun) {
-    return c.json({ ok: true, data: { sessionId, dryRun: true, status: session.status }, error: null });
-  }
-
-  try {
-    const traceId = crypto.randomUUID();
-    const result = await runOrchestrator(sessionId, parsed.data);
-
-    const updated = await getSession(sessionId);
-    return c.json({
-      ok: true,
-      data: { traceId, sessionId, text: result.text, steps: result.steps.length, status: updated?.status ?? "running" },
-      error: null,
-    });
-  } catch (error) {
-    return c.json({ ok: false, data: null, error: `run_failed: ${String(error)}` }, 500);
-  }
-});
-
 sessions.post("/:id/stop", async (c) => {
   const sessionId = c.req.param("id");
   const session = await getSession(sessionId);
-
   if (!session) return c.json({ ok: false, data: null, error: "session_not_found" }, 404);
 
   await hub.emergencyStop();

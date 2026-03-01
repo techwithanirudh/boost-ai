@@ -3,3 +3,4 @@
 - Split hono into multiple routers
 - Write server log to a file..., and configure global logger
 - Make the hub service an actual service...
+- Add commitlint / configure linting
