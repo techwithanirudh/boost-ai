@@ -1,6 +1,6 @@
 import { loadMessages, saveMessages } from "@boost/db/queries/sessions";
 import type { ModelMessage, UserContent } from "ai";
-import { stepCountIs, ToolLoopAgent } from "ai";
+import { ToolLoopAgent } from "ai";
 import { successToolCall } from "@/lib/agents/utils";
 import { hub } from "@/lib/hub";
 import { robotPrompt as systemPrompt } from "@/lib/prompts/robot";
@@ -29,7 +29,6 @@ export async function runSession(sessionId: string, goal: string) {
     toolChoice: "required",
     tools: createToolSet(sessionId),
     stopWhen: [
-      stepCountIs(15),
       successToolCall("complete"),
       successToolCall("stop"),
     ],

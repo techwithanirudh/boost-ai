@@ -69,8 +69,10 @@ Fill in `.env`:
 | `OPENAI_API_KEY` | Gemini API key — [aistudio.google.com](https://aistudio.google.com) |
 | `HUB_MAC` | BLE MAC of your LEGO hub (leave empty for auto-discover) |
 | `RTSP_SNAPSHOT_URL` | RTSP stream used by the server to capture AI frames (e.g. `rtsp://192.168.0.123:8554/live/stream`) |
+| `MEDIAMTX_STREAM_PATH` | MediaMTX path name shared by RTMP/RTSP/WebRTC (default: `live/stream`) |
 | `VITE_API_URL` | Server URL reachable from your browser (e.g. `http://192.168.0.123:3000`) |
 | `VITE_MEDIAMTX_URL` | MediaMTX WebRTC URL reachable from your browser (e.g. `http://192.168.0.123:8889`) |
+| `VITE_MEDIAMTX_STREAM_PATH` | WebRTC stream path for the web player (must match `MEDIAMTX_STREAM_PATH`) |
 | `CORS_ORIGIN` | Browser origin (e.g. `http://192.168.0.123:3001`) |
 
 ### 5. Push database schema
@@ -114,6 +116,25 @@ In **Larix Broadcaster** on your iPhone:
 The server captures each AI frame directly from `RTSP_SNAPSHOT_URL` using ffmpeg. The live WebRTC feed is embedded directly in the web UI.
 
 > Start streaming before sending a session goal — the AI needs the RTSP stream to be reachable.
+
+### Hotspot setup (recommended)
+
+If you are using a phone hotspot instead of a router:
+
+1. Turn on iPhone Personal Hotspot.
+2. Connect the Raspberry Pi and your control device (phone/laptop browser) to that same hotspot.
+3. On the Pi, get hotspot IP: `ip addr show wlan0` and copy the `inet` address (example: `192.168.0.112`).
+4. Set Larix URL to `rtmp://<pi-hotspot-ip>:1935/live/stream`.
+5. In `.env`, set:
+   - `RTSP_SNAPSHOT_URL=rtsp://localhost:8554/live/stream`
+   - `MEDIAMTX_STREAM_PATH=live/stream`
+   - `VITE_MEDIAMTX_URL=http://<pi-hotspot-ip>:8889`
+   - `VITE_MEDIAMTX_STREAM_PATH=live/stream`
+   - `VITE_API_URL=http://<pi-hotspot-ip>:3000`
+   - `CORS_ORIGIN=http://<pi-hotspot-ip>:3001`
+6. Restart `./start.sh` after env changes.
+
+If you see `no stream is available on path 'live/stream'`, Larix is not currently publishing to that exact path.
 
 ---
 
