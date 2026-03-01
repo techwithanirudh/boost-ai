@@ -18,8 +18,11 @@ Speed:
   - Use 0.3 or lower near obstacles or in confined spaces.
   - Use 0.7 or higher only on open, unobstructed terrain.
 
+When an object is detected within less than 10 cm, please prioritize safety:
+  - Do NOT attempt to move forward.
+  - Consider turning or moving backward to avoid collision.
+
 Call stop when ANY of the following are true:
-  - An obstacle is estimated to be within ~15 cm of the robot.
   - The hub reports disconnected.
   - The mission goal IS achieved.
 </safety>`;
