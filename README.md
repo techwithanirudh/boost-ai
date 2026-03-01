@@ -128,7 +128,7 @@ In **Larix Broadcaster** on your iPhone:
 - **URL**: `rtmp://192.168.0.118:1935/live/stream`
 - **Stream name**: *(leave blank — it's part of the URL)*
 
-When Larix connects, MediaMTX spawns `ffmpeg` automatically and writes a JPEG to `/tmp/boost-snapshot.jpg` every 2 seconds. The AI server reads that file directly — no HTTP snapshot endpoint needed.
+When Larix connects, MediaMTX spawns `ffmpeg` automatically and writes a JPEG to `/tmp/snapshot.jpg` every 2 seconds. The AI server reads that file directly — no HTTP snapshot endpoint needed.
 
 > Sessions will fail with `frame_fetch_failed: ENOENT` if Larix is not streaming (the snapshot file won't exist yet). Start streaming before sending a goal.
 

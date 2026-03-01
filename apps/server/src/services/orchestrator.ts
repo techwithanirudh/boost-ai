@@ -2,10 +2,13 @@ import { loadMessages, saveMessages } from "@boost/db/queries/sessions";
 import type { ModelMessage, UserContent } from "ai";
 import { stepCountIs, ToolLoopAgent } from "ai";
 import { successToolCall } from "@/lib/agents/utils";
+import { createLogger } from "@/lib/logger";
 import { robotPrompt as systemPrompt } from "@/lib/prompts/robot";
 import { config, provider } from "@/lib/providers";
 import { createToolSet } from "@/lib/tools";
 import { fetchLatestFrame } from "./frame";
+
+const log = createLogger("orchestrator");
 
 export async function runSession(sessionId: string, goal: string) {
   const previous = await loadMessages(sessionId, config.history.limit);
@@ -31,6 +34,22 @@ export async function runSession(sessionId: string, goal: string) {
       successToolCall("complete"),
       successToolCall("stop"),
     ],
+    onStepFinish(step) {
+      const calls = step.toolCalls.map((c) => c.toolName);
+      log.info(
+        {
+          sessionId,
+          step: step.stepNumber,
+          tools: calls,
+          finish: step.finishReason,
+          tokens: {
+            in: step.usage.inputTokens,
+            out: step.usage.outputTokens,
+          },
+        },
+        `step ${step.stepNumber} — ${calls.join(", ") || "no tool calls"}`
+      );
+    },
     experimental_telemetry: {
       isEnabled: true,
       functionId: "robot-orchestrator",

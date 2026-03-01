@@ -1,6 +1,7 @@
 # MediaMTX configuration for Boost robot camera
 # iPhone Larix pushes RTMP to rtmp://<host>:1935/live/stream
-# ffmpeg captures a JPEG snapshot to /tmp/boost-snapshot.jpg every 2 s
+# ffmpeg captures a JPEG snapshot to /tmp/snapshot.jpg every 2 s (for AI)
+# WebRTC player available at http://<host>:8889/live/stream (for operator UI)
 
 logLevel: info
 
@@ -16,10 +17,13 @@ hls: false
 rtmp: true
 rtmpAddress: :1935
 srt: false
-webrtc: false
+
+# WebRTC – browser reads live stream from http://<host>:8889/live/stream
+webrtc: true
+webrtcAddress: :8889
 
 pathDefaults:
-  # Spawn ffmpeg when a publisher connects; write a JPEG every 2 s
+  # Spawn ffmpeg when a publisher connects; write a JPEG every 2 s for the AI
   runOnReady: >-
     ffmpeg -hide_banner -loglevel quiet
     -rtsp_transport tcp -i rtsp://127.0.0.1:8554/$MTX_PATH

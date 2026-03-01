@@ -9,7 +9,7 @@ export async function fetchLatestFrame(): Promise<string> {
     return `data:image/jpeg;base64,${b64}`;
   } catch (error) {
     throw new Error(
-      `frame_fetch_failed: ${error instanceof Error ? error.message : String(error)}`,
+      `frame_fetch_failed: ${error instanceof Error ? error.message : String(error)}`
     );
   }
 }

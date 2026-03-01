@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -9,6 +9,9 @@ import { api, type SessionResult, type SessionStatus } from "@/lib/api";
 export const Route = createFileRoute("/")({
   component: ControlPanel,
 });
+
+const MEDIAMTX_URL =
+  import.meta.env.VITE_MEDIAMTX_URL ?? "http://localhost:8889";
 
 // ── tiny helpers ──────────────────────────────────────────────────────────────
 
@@ -39,6 +42,17 @@ function HubBadge({ connected }: { connected: boolean | null }) {
   );
 }
 
+function CameraFeed() {
+  return (
+    <iframe
+      allow="autoplay"
+      className="aspect-video w-full rounded border border-border bg-black"
+      src={`${MEDIAMTX_URL}/live/stream`}
+      title="Live camera feed"
+    />
+  );
+}
+
 // ── main component ─────────────────────────────────────────────────────────────
 
 function ControlPanel() {
@@ -47,8 +61,6 @@ function ControlPanel() {
   const [loading, setLoading] = useState(false);
   const [session, setSession] = useState<SessionResult | null>(null);
   const [hubConnected, setHubConnected] = useState<boolean | null>(null);
-  const goalRef = useRef<HTMLInputElement>(null);
-
   // ── health polling ──
   useEffect(() => {
     const check = async () => {
@@ -128,6 +140,9 @@ function ControlPanel() {
         <HubBadge connected={hubConnected} />
       </div>
 
+      {/* ── Camera feed ── */}
+      <CameraFeed />
+
       {/* ── Goal input ── */}
       <Card className="space-y-3 px-4 py-4">
         <p className="text-muted-foreground text-xs uppercase tracking-wider">
@@ -140,7 +155,6 @@ function ControlPanel() {
             onChange={(e) => setGoal(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && !loading && handleStart()}
             placeholder="e.g. go to the kitchen"
-            ref={goalRef}
             value={goal}
           />
           <Button
