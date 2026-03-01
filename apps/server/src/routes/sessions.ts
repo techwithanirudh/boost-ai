@@ -70,7 +70,7 @@ sessions.post("/", async (c) => {
     const ms = Date.now() - started;
 
     log.info(
-      { sessionId, status, steps, ms, tokens: result.usage },
+      { sessionId, status, steps, ms },
       `session ${status} — ${steps} step${steps !== 1 ? "s" : ""} in ${ms}ms`
     );
 
