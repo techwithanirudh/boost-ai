@@ -20,6 +20,7 @@ command -v poetry  >/dev/null || die "poetry not found — https://python-poetry
 command -v ffmpeg  >/dev/null || die "ffmpeg not found — sudo apt install ffmpeg"
 
 MEDIAMTX_BIN="./bin/mediamtx"
+HUB_MAC="$(awk -F= '/^HUB_MAC=/{print $2}' .env | tail -n1 | tr -d '"' | tr -d "'")"
 
 if [[ ! -x "$MEDIAMTX_BIN" ]]; then
   mkdir -p ./bin
@@ -29,6 +30,14 @@ if [[ ! -x "$MEDIAMTX_BIN" ]]; then
     | tar xz -C ./bin mediamtx
   chmod +x "$MEDIAMTX_BIN"
   ok "mediamtx downloaded."
+fi
+
+if [[ -n "$HUB_MAC" ]] && command -v bluetoothctl >/dev/null 2>&1; then
+  warn "Resetting BLE state for HUB_MAC=${HUB_MAC}…"
+  bluetoothctl disconnect "$HUB_MAC" >/dev/null 2>&1 || true
+  bluetoothctl remove "$HUB_MAC" >/dev/null 2>&1 || true
+  sudo -n bluetoothctl disconnect "$HUB_MAC" >/dev/null 2>&1 || true
+  sudo -n bluetoothctl remove "$HUB_MAC" >/dev/null 2>&1 || true
 fi
 
 info "Starting…"
