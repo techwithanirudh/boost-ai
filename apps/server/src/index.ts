@@ -4,9 +4,9 @@ import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { hub } from "./lib/hub";
 import { config } from "./lib/providers";
-import { executeRoutes } from "./routes/execute";
-import { healthRoutes } from "./routes/health";
-import { missionRoutes } from "./routes/missions";
+import { execute } from "./routes/execute";
+import { health } from "./routes/health";
+import { sessions } from "./routes/sessions";
 
 const app = new Hono();
 
@@ -20,17 +20,17 @@ app.use(
 );
 
 app.get("/", (c) => c.text("OK"));
-app.route("/v1/health", healthRoutes);
-app.route("/v1/execute", executeRoutes);
-app.route("/v1/missions", missionRoutes);
+app.route("/v1/health", health);
+app.route("/v1/execute", execute);
+app.route("/v1/sessions", sessions);
 
 export default app;
 
 async function waitForHubReady(): Promise<void> {
   const started = Date.now();
   for (;;) {
-    const health = await hub.getHealth();
-    if (health.ok) return;
+    const h = await hub.getHealth();
+    if (h.ok) return;
     if (Date.now() - started > config.hub.timeoutMs) {
       throw new Error(`hub_not_ready_within_timeout: ${config.hub.timeoutMs}ms`);
     }

@@ -1,0 +1,27 @@
+# MediaMTX configuration for Boost robot camera
+# iPhone Larix streams via RTSP push to the "cam" path.
+# The HTTP API on :8888 provides JPEG snapshots consumed by the AI server.
+
+logLevel: info
+
+# API (snapshot endpoint lives here: GET /cam/get-jpeg-snapshot)
+api: true
+apiAddress: :9997
+
+# RTSP server – iPhone Larix publishes to rtsp://<host>:8554/cam
+rtsp: true
+rtspAddress: :8554
+
+# HLS / HTTP streaming
+hls: true
+hlsAddress: :8888
+
+# Disable unused protocols to reduce attack surface
+rtmp: false
+srt: false
+webrtc: false
+
+paths:
+  cam:
+    # Accept any publisher; restrict in production with publishUser/publishPass
+    source: publisher

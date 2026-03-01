@@ -6,15 +6,19 @@ services:
       dockerfile: apps/server/Dockerfile
     environment:
       NODE_ENV: ${NODE_ENV:-production}
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3001}
+      CORS_ORIGIN: ${CORS_ORIGIN}
       DATABASE_URL: ${DATABASE_URL}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY}
       HUB_BASE_URL: ${HUB_BASE_URL:-http://hub:8000}
+      MEDIAMTX_BASE_URL: ${MEDIAMTX_BASE_URL:-http://mediamtx:8888}
+      MEDIAMTX_STREAM_PATH: ${MEDIAMTX_STREAM_PATH:-cam}
     ports:
       - "3000:3000"
     depends_on:
       hub:
         condition: service_healthy
+      mediamtx:
+        condition: service_started
     restart: unless-stopped
 
   hub:
@@ -24,7 +28,7 @@ services:
       dockerfile: apps/hub/Dockerfile
     environment:
       PORT: ${HUB_PORT:-8000}
-      HUB_MAC: ${HUB_MAC:-}
+      HUB_MAC: ${HUB_MAC}
       HUB_CONNECT_TIMEOUT_S: ${HUB_CONNECT_TIMEOUT_S:-300}
       WATCHDOG_TIMEOUT_S: ${WATCHDOG_TIMEOUT_S:-5}
       MOTOR_DEFAULT_SPEED: ${MOTOR_DEFAULT_SPEED:-0.5}
@@ -47,8 +51,10 @@ services:
   mediamtx:
     container_name: mediamtx
     image: bluenviron/mediamtx:latest
+    volumes:
+      - ./mediamtx.yml:/mediamtx.yml:ro
     ports:
-      - "8554:8554"
-      - "1935:1935"
-      - "8888:8888"
+      - "8554:8554"  # RTSP (iPhone Larix publishes here)
+      - "8888:8888"  # HLS / snapshot API
+      - "9997:9997"  # MediaMTX API
     restart: unless-stopped

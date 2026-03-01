@@ -4,58 +4,44 @@ import { db } from "../index";
 import { aiSessions } from "../schema";
 
 export type SessionRow = typeof aiSessions.$inferSelect;
+export type SessionStatus = "running" | "stopped" | "completed";
 
 // ---------------------------------------------------------------------------
-// Session management
+// Session CRUD
 // ---------------------------------------------------------------------------
 
-export async function getOrCreateSession(params: {
+export async function createSession(params: {
   id: string;
   goal: string;
-  missionId?: string;
 }): Promise<SessionRow> {
-  const existing = await db
-    .select()
-    .from(aiSessions)
-    .where(eq(aiSessions.id, params.id))
-    .limit(1);
-
-  if (existing[0]) {
-    const updated = await db
-      .update(aiSessions)
-      .set({
-        goal: params.goal,
-        missionId: params.missionId ?? existing[0].missionId,
-        updatedAt: new Date(),
-      })
-      .where(eq(aiSessions.id, params.id))
-      .returning();
-    return updated[0]!;
-  }
-
   const created = await db
     .insert(aiSessions)
-    .values({
-      id: params.id,
-      missionId: params.missionId ?? null,
-      goal: params.goal,
-      messages: [],
-      updatedAt: new Date(),
-    })
+    .values({ id: params.id, goal: params.goal, messages: [] })
     .returning();
 
   if (!created[0]) throw new Error("failed_to_create_session");
   return created[0];
 }
 
+export async function getSession(id: string): Promise<SessionRow | undefined> {
+  const rows = await db.select().from(aiSessions).where(eq(aiSessions.id, id)).limit(1);
+  return rows[0];
+}
+
+export async function updateSessionStatus(
+  id: string,
+  status: SessionStatus,
+): Promise<void> {
+  await db
+    .update(aiSessions)
+    .set({ status, updatedAt: new Date() })
+    .where(eq(aiSessions.id, id));
+}
+
 // ---------------------------------------------------------------------------
 // Message persistence (AI SDK ModelMessage[] pattern)
 // ---------------------------------------------------------------------------
 
-/**
- * Load the stored ModelMessage[] for a session, trimmed to the most recent
- * `limit` entries so the context window stays bounded.
- */
 export async function loadMessages(sessionId: string, limit: number): Promise<ModelMessage[]> {
   const rows = await db
     .select({ messages: aiSessions.messages })
@@ -67,10 +53,6 @@ export async function loadMessages(sessionId: string, limit: number): Promise<Mo
   return stored.slice(-limit);
 }
 
-/**
- * Persist the updated message array, trimmed to `limit` before writing
- * so the JSONB column stays bounded.
- */
 export async function saveMessages(
   sessionId: string,
   messages: ModelMessage[],

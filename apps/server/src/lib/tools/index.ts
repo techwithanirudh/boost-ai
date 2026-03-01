@@ -6,6 +6,7 @@ import { stopTool } from "./stop";
 import { turnTool } from "./turn";
 
 export { backwardTool, forwardTool, getHealthTool, getPositionTool, stopTool, turnTool };
+export { createCompleteSessionTool } from "./complete-session";
 
 export function createToolSet() {
   return {

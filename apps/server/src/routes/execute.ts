@@ -1,29 +1,29 @@
 import { stepRequestSchema } from "@boost/validators";
 import { Hono } from "hono";
-import { hub } from "@/lib/hub";
-import { decideNextAction } from "@/services/ai-orchestrator";
+import { runOrchestrator } from "@/services/orchestrator";
 
-export const executeRoutes = new Hono();
+export const execute = new Hono();
 
-executeRoutes.post("/", async (c) => {
+execute.post("/", async (c) => {
   const body = await c.req.json().catch(() => ({}));
-  const parsed = stepRequestSchema.safeParse(body);
+  const sessionId = crypto.randomUUID();
+  const parsed = stepRequestSchema.safeParse({ ...body, sessionId, missionId: sessionId });
 
   if (!parsed.success) {
     return c.json({ ok: false, data: null, error: parsed.error.issues }, 400);
   }
 
+  if (parsed.data.dryRun) {
+    return c.json({ ok: true, data: { dryRun: true }, error: null });
+  }
+
   try {
     const traceId = crypto.randomUUID();
-    const aiResult = await decideNextAction(parsed.data);
-
-    const hubResult = parsed.data.dryRun
-      ? { ok: true, data: { dryRun: true, decision: aiResult.decision }, error: null }
-      : await hub.executeAction(aiResult.decision);
+    const result = await runOrchestrator(sessionId, parsed.data);
 
     return c.json({
       ok: true,
-      data: { traceId, decision: aiResult.decision, hubResult },
+      data: { traceId, text: result.text, steps: result.steps.length },
       error: null,
     });
   } catch (error) {
