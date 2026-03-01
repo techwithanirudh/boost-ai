@@ -8,6 +8,8 @@ services:
       NODE_ENV: ${NODE_ENV:-production}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3001}
       DATABASE_URL: ${DATABASE_URL}
+      AI_MODEL: ${AI_MODEL:-gemini-2.0-flash}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
       HUB_BASE_URL: ${HUB_BASE_URL:-http://hub:8000}
     ports:
       - "3000:3000"

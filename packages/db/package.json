@@ -5,6 +5,15 @@
     ".": {
       "default": "./src/index.ts"
     },
+    "./schema": {
+      "default": "./src/schema.ts"
+    },
+    "./queries": {
+      "default": "./src/queries/index.ts"
+    },
+    "./queries/*": {
+      "default": "./src/queries/*.ts"
+    },
     "./*": {
       "default": "./src/*.ts"
     }
@@ -17,6 +26,7 @@
   },
   "dependencies": {
     "@boost/env": "workspace:*",
+    "@boost/validators": "workspace:*",
     "@neondatabase/serverless": "^1.0.2",
     "dotenv": "catalog:",
     "drizzle-orm": "^0.45.1",

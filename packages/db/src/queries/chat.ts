@@ -1,12 +1,11 @@
-import { db } from "@boost/db";
-import { aiMessages, aiSessions } from "@boost/db/schema";
-import type { ActionDecision, StepRequest } from "@boost/validators";
 import { desc, eq } from "drizzle-orm";
-import { AI_ITERATION_HISTORY_LIMIT } from "../lib/config";
+import type { ActionDecision, StepRequest } from "@boost/validators";
+import { db } from "../index";
+import { aiMessages, aiSessions } from "../schema";
 
 type SessionRow = typeof aiSessions.$inferSelect;
 
-type ConversationContext = {
+export type ConversationContext = {
   sessionId: string;
   rollingSummary: string;
   recentHistory: string;
@@ -37,7 +36,12 @@ export async function openSession(input: StepRequest): Promise<SessionRow> {
         .update(aiSessions)
         .set({ goal: input.goal, missionId: input.missionId ?? existing[0].missionId, updatedAt: new Date() })
         .where(eq(aiSessions.id, input.sessionId));
-      return { ...existing[0], goal: input.goal, missionId: input.missionId ?? existing[0].missionId, updatedAt: new Date() };
+      return {
+        ...existing[0],
+        goal: input.goal,
+        missionId: input.missionId ?? existing[0].missionId,
+        updatedAt: new Date(),
+      };
     }
   }
 
@@ -77,12 +81,13 @@ export async function appendAssistantIteration(params: {
   decision: ActionDecision;
   hubResult: unknown;
   toolCalls?: unknown;
+  historyLimit?: number;
 }): Promise<void> {
   await db.insert(aiMessages).values({
     sessionId: params.sessionId,
     role: "assistant",
     content: params.decision.text,
-    decision: params.decision,
+    decision: params.decision as any,
     hubResult: params.hubResult as any,
     toolCalls: (params.toolCalls ?? null) as any,
   });
@@ -92,7 +97,7 @@ export async function appendAssistantIteration(params: {
     .from(aiMessages)
     .where(eq(aiMessages.sessionId, params.sessionId))
     .orderBy(desc(aiMessages.createdAt))
-    .limit(AI_ITERATION_HISTORY_LIMIT);
+    .limit(params.historyLimit ?? 12);
 
   const lines = rows
     .slice()
@@ -105,7 +110,7 @@ export async function appendAssistantIteration(params: {
     .where(eq(aiSessions.id, params.sessionId));
 }
 
-export async function loadConversationContext(sessionId: string): Promise<ConversationContext> {
+export async function loadConversationContext(sessionId: string, historyLimit = 12): Promise<ConversationContext> {
   const session = await db.select().from(aiSessions).where(eq(aiSessions.id, sessionId)).limit(1);
   const row = session[0];
 
@@ -114,7 +119,7 @@ export async function loadConversationContext(sessionId: string): Promise<Conver
     .from(aiMessages)
     .where(eq(aiMessages.sessionId, sessionId))
     .orderBy(desc(aiMessages.createdAt))
-    .limit(AI_ITERATION_HISTORY_LIMIT);
+    .limit(historyLimit);
 
   const recentHistory = messages
     .slice()

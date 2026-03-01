@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from hub.models import ExecuteMotionCommand, MotionCommand
+from hub.models import ExecuteMotionCommand
 from hub.service import HubService
 
 app = FastAPI(title="boost-hub", version="0.1.0")
@@ -27,26 +27,6 @@ def hub_state() -> dict:
 @app.post("/motion/execute")
 def motion_execute(payload: ExecuteMotionCommand) -> dict:
     return service.execute(payload)
-
-
-@app.post("/motion/forward")
-def motion_forward(payload: MotionCommand) -> dict:
-    return service.forward(payload)
-
-
-@app.post("/motion/backward")
-def motion_backward(payload: MotionCommand) -> dict:
-    return service.backward(payload)
-
-
-@app.post("/motion/turn")
-def motion_turn(payload: MotionCommand) -> dict:
-    return service.turn(payload)
-
-
-@app.post("/motion/stop")
-def motion_stop() -> dict:
-    return service.stop()
 
 
 @app.post("/motion/emergency-stop")

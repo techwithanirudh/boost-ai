@@ -80,6 +80,7 @@
       "name": "@boost/db",
       "dependencies": {
         "@boost/env": "workspace:*",
+        "@boost/validators": "workspace:*",
         "@neondatabase/serverless": "^1.0.2",
         "dotenv": "catalog:",
         "drizzle-orm": "^0.45.1",

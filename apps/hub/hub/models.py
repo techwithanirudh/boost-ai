@@ -10,8 +10,3 @@ class ExecuteMotionCommand(BaseModel):
     value: float = Field(default=0.0, description="Distance cm for linear actions, degrees for turn")
     speed: float = Field(default=0.5, ge=0.0, le=1.0)
     text: str | None = Field(default=None, description="Human-readable rationale from AI")
-
-
-class MotionCommand(BaseModel):
-    value: float = Field(..., description="Distance in cm for linear movement or degrees for turn")
-    speed: float = Field(default=0.5, ge=0.0, le=1.0)

@@ -1,16 +1,11 @@
 import { env } from "@boost/env/server";
+import { appendAssistantIteration, appendUserIteration, loadConversationContext, openSession } from "@boost/db/queries/chat";
 import { stepRequestSchema } from "@boost/validators";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { z } from "zod";
 import { decideNextActionWithContext } from "./services/ai-orchestrator";
-import {
-  appendAssistantIteration,
-  appendUserIteration,
-  loadConversationContext,
-  openSession,
-} from "./services/ai-memory";
 import { executeAction, getHealth } from "./services/hub-service";
 
 const app = new Hono();
