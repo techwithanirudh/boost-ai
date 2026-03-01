@@ -1,6 +1,9 @@
 import { tool } from "ai";
 import { z } from "zod";
+import { createLogger } from "@/lib/logger";
 import { hub } from "../hub";
+
+const log = createLogger("tool:backward");
 
 export const backwardTool = tool({
   description:
@@ -26,12 +29,16 @@ export const backwardTool = tool({
       .describe("Brief rationale for this decision (shown in logs)."),
   }),
   execute: async ({ value, speed, text }) => {
+    log.info({ value, speed, text }, `backward ${value}cm`);
     const result = await hub.executeAction({
       action: "backward_cm",
       value,
       speed,
       text,
     });
+    if (!result.ok) {
+      log.error({ error: result.error }, "backward failed");
+    }
     return { ok: result.ok, data: result.data, error: result.error };
   },
 });

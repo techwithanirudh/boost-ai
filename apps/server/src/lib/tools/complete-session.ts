@@ -1,6 +1,9 @@
 import { updateSessionStatus } from "@boost/db/queries/sessions";
 import { tool } from "ai";
 import { z } from "zod";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("tool:complete");
 
 export function completeSessionTool(sessionId: string) {
   return tool({
@@ -13,6 +16,7 @@ export function completeSessionTool(sessionId: string) {
         .describe("Brief summary of what was accomplished."),
     }),
     execute: async ({ summary }) => {
+      log.info({ sessionId, summary }, "session complete");
       await updateSessionStatus(sessionId, "completed");
       return { ok: true, summary };
     },

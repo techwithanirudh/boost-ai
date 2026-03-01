@@ -1,6 +1,9 @@
 import { tool } from "ai";
 import { z } from "zod";
+import { createLogger } from "@/lib/logger";
 import { hub } from "../hub";
+
+const log = createLogger("tool:turn");
 
 export const turnTool = tool({
   description:
@@ -28,12 +31,17 @@ export const turnTool = tool({
       .describe("Brief rationale for this decision (shown in logs)."),
   }),
   execute: async ({ value, speed, text }) => {
+    const dir = value >= 0 ? "right" : "left";
+    log.info({ value, speed, text }, `turn ${Math.abs(value)}° ${dir}`);
     const result = await hub.executeAction({
       action: "turn_deg",
       value,
       speed,
       text,
     });
+    if (!result.ok) {
+      log.error({ error: result.error }, "turn failed");
+    }
     return { ok: result.ok, data: result.data, error: result.error };
   },
 });

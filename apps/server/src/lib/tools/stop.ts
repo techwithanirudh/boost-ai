@@ -1,6 +1,9 @@
 import { tool } from "ai";
 import { z } from "zod";
+import { createLogger } from "@/lib/logger";
 import { hub } from "../hub";
+
+const log = createLogger("tool:stop");
 
 export const stopTool = tool({
   description:
@@ -13,12 +16,16 @@ export const stopTool = tool({
       .describe("Brief rationale for stopping (shown in logs)."),
   }),
   execute: async ({ text }) => {
+    log.warn({ text }, "stop");
     const result = await hub.executeAction({
       action: "stop",
       value: 0,
       speed: 0.5,
       text,
     });
+    if (!result.ok) {
+      log.error({ error: result.error }, "stop failed");
+    }
     return { ok: result.ok, data: result.data, error: result.error };
   },
 });

@@ -43,6 +43,17 @@ then issue the single best motion command.
 <tool>
   <name>stop</name>
   <description>Halt all motion immediately. Terminal — the loop ends after a successful call.</description>
-  <when>Scene is unclear / unsafe / goal achieved / hub offline / previous error unresolved.</when>
+  <when>Scene is unclear / unsafe / hub offline / previous error unresolved. Do NOT use to signal goal completion — use complete for that.</when>
+</tool>
+
+<tool>
+  <name>complete</name>
+  <description>
+    Declare the mission fully accomplished. Terminal — ends the session.
+    ONLY call this when the current frame visually confirms you are at the goal location.
+    You must have already arrived and double-checked — not just believe you are close.
+    Calling complete without visual confirmation is a mission failure.
+  </description>
+  <when>You can clearly see in the current frame that you have reached the goal. Not before.</when>
 </tool>
 </tools>`;

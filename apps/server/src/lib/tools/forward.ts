@@ -1,6 +1,9 @@
 import { tool } from "ai";
 import { z } from "zod";
+import { createLogger } from "@/lib/logger";
 import { hub } from "../hub";
+
+const log = createLogger("tool:forward");
 
 export const forwardTool = tool({
   description:
@@ -26,12 +29,16 @@ export const forwardTool = tool({
       .describe("Brief rationale for this decision (shown in logs)."),
   }),
   execute: async ({ value, speed, text }) => {
+    log.info({ value, speed, text }, `forward ${value}cm`);
     const result = await hub.executeAction({
       action: "forward_cm",
       value,
       speed,
       text,
     });
+    if (!result.ok) {
+      log.error({ error: result.error }, "forward failed");
+    }
     return { ok: result.ok, data: result.data, error: result.error };
   },
 });
