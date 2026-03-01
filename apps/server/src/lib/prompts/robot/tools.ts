@@ -36,8 +36,12 @@ then issue the single best motion command.
 
 <tool>
   <name>turn</name>
-  <description>Rotate the robot in place. Terminal — the loop ends after a successful call.</description>
-  <when>Path is blocked and a turn will reveal a better route, or a course correction is needed.</when>
+  <description>Rotate the robot in place. Terminal, the loop ends after a successful call.</description>
+  <when>
+    Path is blocked and a turn will reveal a better route, or a course correction is needed.
+    For scanning and visual search, default to +5-15 (at maximum)° turns at low speed.
+    If uncertain, do repeated +5-15° low-speed rescans instead of a large turn.
+  </when>
 </tool>
 
 <tool>
