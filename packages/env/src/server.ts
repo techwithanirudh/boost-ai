@@ -7,7 +7,6 @@ export const env = createEnv({
     DATABASE_URL: z.string().min(1),
     CORS_ORIGIN: z.url().default("http://localhost:3001"),
     NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
-    AI_MODEL: z.string().min(1).default("gemini-2.0-flash"),
     GOOGLE_API_KEY: z.string().min(1),
     HUB_BASE_URL: z.url().default("http://localhost:8000"),
     STEP_TIMEOUT_MS: z.coerce.number().int().positive().default(15000),

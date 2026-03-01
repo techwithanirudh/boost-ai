@@ -15,6 +15,7 @@
     "@boost/env": "workspace:*",
     "@boost/validators": "workspace:*",
     "ai": "^6.0.105",
+    "ai-retry": "^1.2.0",
     "dotenv": "catalog:",
     "drizzle-orm": "^0.45.1",
     "hono": "^4.8.2",

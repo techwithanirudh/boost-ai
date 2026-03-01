@@ -8,13 +8,13 @@ services:
       NODE_ENV: ${NODE_ENV:-development}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3001}
       DATABASE_URL: ${DATABASE_URL}
-      AI_MODEL: ${AI_MODEL:-gemini-2.0-flash}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY}
       HUB_BASE_URL: ${HUB_BASE_URL:-http://hub:8000}
     ports:
       - "3000:3000"
     depends_on:
-      - hub
+      hub:
+        condition: service_healthy
     restart: unless-stopped
 
   hub:
@@ -31,4 +31,24 @@ services:
       COMMAND_TIMEOUT_S: ${COMMAND_TIMEOUT_S:-10}
     ports:
       - "8000:8000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').getcode()==200 else 1)",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  mediamtx:
+    container_name: mediamtx
+    image: bluenviron/mediamtx:latest
+    ports:
+      - "8554:8554"
+      - "1935:1935"
+      - "8888:8888"
     restart: unless-stopped

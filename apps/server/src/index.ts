@@ -28,7 +28,7 @@ app.get("/v1/health", async (c) => {
     ok: true,
     data: {
       service: "server",
-      aiModel: env.AI_MODEL,
+      aiModel: "chat-model",
       hub,
     },
     error: null,
