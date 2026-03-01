@@ -11,7 +11,10 @@ import { sessions } from "./routes/sessions";
 const app = new Hono();
 
 app.use(logger());
-app.use("/*", cors({ origin: env.CORS_ORIGIN, allowMethods: ["GET", "POST", "OPTIONS"] }));
+app.use(
+  "/*",
+  cors({ origin: env.CORS_ORIGIN, allowMethods: ["GET", "POST", "OPTIONS"] })
+);
 
 app.get("/", (c) => c.text("OK"));
 app.route("/v1/health", health);
@@ -24,11 +27,17 @@ async function waitForHubReady(): Promise<void> {
   const started = Date.now();
   for (;;) {
     const h = await hub.getHealth();
-    if (h.ok) return;
-    if (Date.now() - started > config.hub.timeoutMs) {
-      throw new Error(`hub_not_ready_within_timeout: ${config.hub.timeoutMs}ms`);
+    if (h.ok) {
+      return;
     }
-    await new Promise<void>((resolve) => setTimeout(resolve, config.hub.pollIntervalMs));
+    if (Date.now() - started > config.hub.timeoutMs) {
+      throw new Error(
+        `hub_not_ready_within_timeout: ${config.hub.timeoutMs}ms`
+      );
+    }
+    await new Promise<void>((resolve) =>
+      setTimeout(resolve, config.hub.pollIntervalMs)
+    );
   }
 }
 

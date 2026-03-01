@@ -19,18 +19,24 @@ export async function createSession(params: {
     .values({ id: params.id, goal: params.goal, messages: [] })
     .returning();
 
-  if (!created[0]) throw new Error("failed_to_create_session");
+  if (!created[0]) {
+    throw new Error("failed_to_create_session");
+  }
   return created[0];
 }
 
 export async function getSession(id: string): Promise<SessionRow | undefined> {
-  const rows = await db.select().from(aiSessions).where(eq(aiSessions.id, id)).limit(1);
+  const rows = await db
+    .select()
+    .from(aiSessions)
+    .where(eq(aiSessions.id, id))
+    .limit(1);
   return rows[0];
 }
 
 export async function updateSessionStatus(
   id: string,
-  status: SessionStatus,
+  status: SessionStatus
 ): Promise<void> {
   await db
     .update(aiSessions)
@@ -42,7 +48,10 @@ export async function updateSessionStatus(
 // Message persistence (AI SDK ModelMessage[] pattern)
 // ---------------------------------------------------------------------------
 
-export async function loadMessages(sessionId: string, limit: number): Promise<ModelMessage[]> {
+export async function loadMessages(
+  sessionId: string,
+  limit: number
+): Promise<ModelMessage[]> {
   const rows = await db
     .select({ messages: aiSessions.messages })
     .from(aiSessions)
@@ -56,10 +65,13 @@ export async function loadMessages(sessionId: string, limit: number): Promise<Mo
 export async function saveMessages(
   sessionId: string,
   messages: ModelMessage[],
-  limit: number,
+  limit: number
 ): Promise<void> {
   await db
     .update(aiSessions)
-    .set({ messages: messages.slice(-limit) as unknown[], updatedAt: new Date() })
+    .set({
+      messages: messages.slice(-limit) as unknown[],
+      updatedAt: new Date(),
+    })
     .where(eq(aiSessions.id, sessionId));
 }

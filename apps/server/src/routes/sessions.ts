@@ -1,4 +1,8 @@
-import { createSession, getSession, updateSessionStatus } from "@boost/db/queries/sessions";
+import {
+  createSession,
+  getSession,
+  updateSessionStatus,
+} from "@boost/db/queries/sessions";
 import { Hono } from "hono";
 import { z } from "zod";
 import { hub } from "@/lib/hub";
@@ -32,7 +36,9 @@ sessions.post("/", async (c) => {
 
   if (id) {
     const existing = await getSession(id);
-    if (!existing) return c.json({ ok: false, data: null, error: "session_not_found" }, 404);
+    if (!existing) {
+      return c.json({ ok: false, data: null, error: "session_not_found" }, 404);
+    }
     // Re-open a completed session so the follow-up can continue
     if (existing.status === "completed") {
       await updateSessionStatus(id, "running");
@@ -58,23 +64,34 @@ sessions.post("/", async (c) => {
       error: null,
     });
   } catch (error) {
-    return c.json({ ok: false, data: null, error: `session_failed: ${String(error)}` }, 500);
+    return c.json(
+      { ok: false, data: null, error: `session_failed: ${String(error)}` },
+      500
+    );
   }
 });
 
 sessions.get("/:id", async (c) => {
   const session = await getSession(c.req.param("id"));
-  if (!session) return c.json({ ok: false, data: null, error: "session_not_found" }, 404);
+  if (!session) {
+    return c.json({ ok: false, data: null, error: "session_not_found" }, 404);
+  }
   return c.json({ ok: true, data: session, error: null });
 });
 
 sessions.post("/:id/stop", async (c) => {
   const sessionId = c.req.param("id");
   const session = await getSession(sessionId);
-  if (!session) return c.json({ ok: false, data: null, error: "session_not_found" }, 404);
+  if (!session) {
+    return c.json({ ok: false, data: null, error: "session_not_found" }, 404);
+  }
 
   await hub.emergencyStop();
   await updateSessionStatus(sessionId, "stopped");
 
-  return c.json({ ok: true, data: { sessionId, status: "stopped" }, error: null });
+  return c.json({
+    ok: true,
+    data: { sessionId, status: "stopped" },
+    error: null,
+  });
 });

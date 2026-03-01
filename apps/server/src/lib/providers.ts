@@ -1,16 +1,20 @@
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
-import { config } from "@boost/config/ai";
+import { config } from "@boost/config";
 import { env } from "@boost/env/server";
-import { type Provider, customProvider } from "ai";
+import { customProvider, type Provider } from "ai";
 import { createRetryable } from "ai-retry";
 
-const google = createGoogleGenerativeAI({ apiKey: env.GOOGLE_API_KEY });
+const google = createGoogleGenerativeAI({
+  apiKey: env.GOOGLE_GENERATIVE_AI_API_KEY,
+});
 
 const onModelError = (ctx: {
   current: { model: { provider: string; modelId: string } };
 }) => {
   const { model } = ctx.current;
-  console.error(`[ai] error with ${model.provider}/${model.modelId}, switching to fallback`);
+  console.error(
+    `[ai] error with ${model.provider}/${model.modelId}, switching to fallback`
+  );
 };
 
 const chatModel = createRetryable({

@@ -1,15 +1,17 @@
 import { z } from "zod";
 
 const speedSchema = z.preprocess(
-  (value) => (typeof value === "number" ? Math.max(0, Math.min(1, value)) : value),
-  z.number().min(0).max(1).default(0.5),
+  (value) =>
+    typeof value === "number" ? Math.max(0, Math.min(1, value)) : value,
+  z.number().min(0).max(1).default(0.5)
 );
 
 const forwardSchema = z.object({
   action: z.literal("forward_cm"),
   value: z.preprocess(
-    (value) => (typeof value === "number" ? Math.max(5, Math.min(30, value)) : value),
-    z.number(),
+    (value) =>
+      typeof value === "number" ? Math.max(5, Math.min(30, value)) : value,
+    z.number()
   ),
   speed: speedSchema,
   text: z.string().min(1).max(500),
@@ -18,8 +20,9 @@ const forwardSchema = z.object({
 const backwardSchema = z.object({
   action: z.literal("backward_cm"),
   value: z.preprocess(
-    (value) => (typeof value === "number" ? Math.max(5, Math.min(30, value)) : value),
-    z.number(),
+    (value) =>
+      typeof value === "number" ? Math.max(5, Math.min(30, value)) : value,
+    z.number()
   ),
   speed: speedSchema,
   text: z.string().min(1).max(500),
@@ -28,8 +31,9 @@ const backwardSchema = z.object({
 const turnSchema = z.object({
   action: z.literal("turn_deg"),
   value: z.preprocess(
-    (value) => (typeof value === "number" ? Math.max(-90, Math.min(90, value)) : value),
-    z.number(),
+    (value) =>
+      typeof value === "number" ? Math.max(-90, Math.min(90, value)) : value,
+    z.number()
   ),
   speed: speedSchema,
   text: z.string().min(1).max(500),

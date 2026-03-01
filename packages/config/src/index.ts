@@ -11,6 +11,6 @@ export const config = {
     /** How long to wait for the hub to become healthy on startup (ms). */
     timeoutMs: 45_000,
     /** Poll interval while waiting for hub (ms). */
-    pollIntervalMs: 1_500,
+    pollIntervalMs: 1500,
   },
 };

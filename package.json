@@ -25,8 +25,9 @@
     "db:studio": "turbo -F @boost/db db:studio",
     "db:generate": "turbo -F @boost/db db:generate",
     "db:migrate": "turbo -F @boost/db db:migrate",
-    "check": "ultracite check",
-    "fix": "ultracite fix"
+    "check": "ultracite check .",
+    "check:unsafe": "ultracite fix --unsafe true .",
+    "check:write": "ultracite fix ."
   },
   "dependencies": {
     "@boost/env": "workspace:*",

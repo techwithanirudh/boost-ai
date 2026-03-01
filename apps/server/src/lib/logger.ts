@@ -1,6 +1,11 @@
 type Level = "debug" | "info" | "warn" | "error";
 
-const LEVEL_RANK: Record<Level, number> = { debug: 0, info: 1, warn: 2, error: 3 };
+const LEVEL_RANK: Record<Level, number> = {
+  debug: 0,
+  info: 1,
+  warn: 2,
+  error: 3,
+};
 
 const activeLevel: Level =
   (process.env.LOG_LEVEL as Level | undefined) &&
@@ -9,7 +14,9 @@ const activeLevel: Level =
     : "info";
 
 function log(level: Level, obj: unknown, msg?: string): void {
-  if (LEVEL_RANK[level] < LEVEL_RANK[activeLevel]) return;
+  if (LEVEL_RANK[level] < LEVEL_RANK[activeLevel]) {
+    return;
+  }
 
   const ts = new Date().toISOString();
   const prefix = `[${ts}] ${level.toUpperCase()}`;
@@ -29,10 +36,30 @@ const logger = {
   warn: (obj: unknown, msg?: string) => log("warn", obj, msg),
   error: (obj: unknown, msg?: string) => log("error", obj, msg),
   child: (bindings: Record<string, unknown>) => ({
-    debug: (obj: unknown, msg?: string) => log("debug", { ...bindings, ...(typeof obj === "object" ? obj : { msg: obj }) }, msg),
-    info: (obj: unknown, msg?: string) => log("info", { ...bindings, ...(typeof obj === "object" ? obj : { msg: obj }) }, msg),
-    warn: (obj: unknown, msg?: string) => log("warn", { ...bindings, ...(typeof obj === "object" ? obj : { msg: obj }) }, msg),
-    error: (obj: unknown, msg?: string) => log("error", { ...bindings, ...(typeof obj === "object" ? obj : { msg: obj }) }, msg),
+    debug: (obj: unknown, msg?: string) =>
+      log(
+        "debug",
+        { ...bindings, ...(typeof obj === "object" ? obj : { msg: obj }) },
+        msg
+      ),
+    info: (obj: unknown, msg?: string) =>
+      log(
+        "info",
+        { ...bindings, ...(typeof obj === "object" ? obj : { msg: obj }) },
+        msg
+      ),
+    warn: (obj: unknown, msg?: string) =>
+      log(
+        "warn",
+        { ...bindings, ...(typeof obj === "object" ? obj : { msg: obj }) },
+        msg
+      ),
+    error: (obj: unknown, msg?: string) =>
+      log(
+        "error",
+        { ...bindings, ...(typeof obj === "object" ? obj : { msg: obj }) },
+        msg
+      ),
   }),
 };
 

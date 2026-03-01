@@ -1,8 +1,8 @@
 import { loadMessages, saveMessages } from "@boost/db/queries/sessions";
 import type { ModelMessage, UserContent } from "ai";
-import { ToolLoopAgent, stepCountIs } from "ai";
+import { stepCountIs, ToolLoopAgent } from "ai";
 import { successToolCall } from "@/lib/agents/utils";
-import { systemPrompt } from "@/lib/prompts/system";
+import { robotPrompt as systemPrompt } from "@/lib/prompts/robot";
 import { config, provider } from "@/lib/providers";
 import { createToolSet } from "@/lib/tools";
 import { fetchLatestFrame } from "./frame";
@@ -45,13 +45,16 @@ export async function runSession(sessionId: string, goal: string) {
       successToolCall("complete"),
       successToolCall("stop"),
     ],
-    experimental_telemetry: { isEnabled: true, functionId: "robot-orchestrator" },
+    experimental_telemetry: {
+      isEnabled: true,
+      functionId: "robot-orchestrator",
+    },
   }).generate({ messages });
 
   await saveMessages(
     sessionId,
     [...messages, ...result.response.messages],
-    config.history.limit,
+    config.history.limit
   );
 
   return result;

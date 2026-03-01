@@ -6,8 +6,6 @@ import { getPositionTool } from "./get-position";
 import { stopTool } from "./stop";
 import { turnTool } from "./turn";
 
-export { backwardTool, forwardTool, getHealthTool, getPositionTool, stopTool, turnTool };
-
 export function createToolSet(sessionId: string) {
   return {
     getHubHealth: getHealthTool,

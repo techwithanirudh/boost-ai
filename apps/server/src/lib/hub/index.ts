@@ -7,14 +7,14 @@ import ky, { HTTPError, type KyInstance } from "ky";
 // ---------------------------------------------------------------------------
 
 export interface HubResult<T = unknown> {
-  ok: boolean;
   data: T | null;
   error: string | null;
+  ok: boolean;
 }
 
 export interface HubHealthData {
-  service: string;
   connected: boolean;
+  service: string;
 }
 
 export interface HubStateData {

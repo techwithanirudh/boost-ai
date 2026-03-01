@@ -186,7 +186,7 @@ Fallback handling:
 - `DATABASE_URL=`
 - `AI_PROVIDER=google`
 - `AI_MODEL=`
-- `GOOGLE_API_KEY=`
+- `GOOGLE_GENERATIVE_AI_API_KEY=`
 - `HUB_BASE_URL=http://hub:8000`
 - `STEP_TIMEOUT_MS=15000`
 

@@ -13,7 +13,12 @@ export const stopTool = tool({
       .describe("Brief rationale for stopping (shown in logs)."),
   }),
   execute: async ({ text }) => {
-    const result = await hub.executeAction({ action: "stop", value: 0, speed: 0.5, text });
+    const result = await hub.executeAction({
+      action: "stop",
+      value: 0,
+      speed: 0.5,
+      text,
+    });
     return { ok: result.ok, data: result.data, error: result.error };
   },
 });

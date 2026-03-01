@@ -30,6 +30,9 @@ execute.post("/", async (c) => {
       error: null,
     });
   } catch (error) {
-    return c.json({ ok: false, data: null, error: `execution_failed: ${String(error)}` }, 500);
+    return c.json(
+      { ok: false, data: null, error: `execution_failed: ${String(error)}` },
+      500
+    );
   }
 });
