@@ -10,8 +10,10 @@ export const env = createEnv({
     GOOGLE_API_KEY: z.string().min(1),
     HUB_BASE_URL: z.url().default("http://localhost:8000"),
     STEP_TIMEOUT_MS: z.coerce.number().int().positive().default(15_000),
-    /** MediaMTX HTTP API snapshot endpoint, e.g. http://mediamtx:8888/cam/get-jpeg-snapshot */
-    MEDIAMTX_SNAPSHOT_URL: z.url().default("http://localhost:8888/cam/get-jpeg-snapshot"),
+    /** MediaMTX HTTP API base URL, e.g. http://mediamtx:8888 */
+    MEDIAMTX_BASE_URL: z.url().default("http://localhost:8888"),
+    /** RTSP stream path published by the camera (e.g. iPhone Larix → "cam") */
+    MEDIAMTX_STREAM_PATH: z.string().default("cam"),
   },
   runtimeEnv: process.env,
   emptyStringAsUndefined: true,

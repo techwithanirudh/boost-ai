@@ -7,7 +7,7 @@ import { turnTool } from "./turn";
 
 export { backwardTool, forwardTool, getHealthTool, getPositionTool, stopTool, turnTool };
 
-export function createTools() {
+export function createToolSet() {
   return {
     getHubHealth: getHealthTool,
     getPosition: getPositionTool,

@@ -1,9 +1,9 @@
 import { Hono } from "hono";
 import { hub } from "@/lib/hub";
 
-export const healthRoutes = new Hono();
+export const health = new Hono();
 
-healthRoutes.get("/", async (c) => {
+health.get("/", async (c) => {
   const hubHealth = await hub.getHealth();
   return c.json({
     ok: true,

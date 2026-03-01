@@ -56,7 +56,6 @@ export async function decideNextAction(input: StepRequest): Promise<AIResult> {
     tools: createDiagnosticTools(),
     stopWhen: stepCountIs(config.ai.maxToolSteps),
     output: Output.object({ schema: decisionSchema }),
-    temperature: 0.1,
   });
 
   // Persist: previous history + new user message + all assistant/tool messages
