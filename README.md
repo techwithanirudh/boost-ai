@@ -66,3 +66,9 @@ boost/
 - `bun run db:generate`: Generate database client/types
 - `bun run db:migrate`: Run database migrations
 - `bun run db:studio`: Open database studio UI
+
+## Planning Docs
+
+- Current refactor execution plan: `plan.md`
+- Archived plan from `origin/main` HEAD: `docs/plans/archive/plan-origin-main-latest.md`
+- Archived plan from `origin/main` four commits back (`c3b95b7`): `docs/plans/archive/plan-origin-main-4-commits-back-c3b95b7.md`
