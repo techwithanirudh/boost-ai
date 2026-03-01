@@ -20,7 +20,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH="/venv/bin:$PATH"
 
-RUN adduser --system --uid 1001 app
+RUN addgroup --system app && adduser --system --uid 1001 --ingroup app app
 
 COPY --from=builder /venv /venv
 COPY apps/hub .
