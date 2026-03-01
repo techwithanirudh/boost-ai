@@ -1,18 +1,15 @@
-import { env } from "@boost/env/server";
-import ky, { HTTPError } from "ky";
+import { readFile } from "node:fs/promises";
+
+const SNAPSHOT_PATH = "/tmp/snapshot.jpg";
 
 export async function fetchLatestFrame(): Promise<string> {
-  const url = `${env.MEDIAMTX_BASE_URL}/${env.MEDIAMTX_STREAM_PATH}/get-jpeg-snapshot`;
-
   try {
-    const bytes = await ky.get(url, { timeout: 5000, retry: 0 }).arrayBuffer();
-    const b64 = Buffer.from(bytes).toString("base64");
+    const bytes = await readFile(SNAPSHOT_PATH);
+    const b64 = bytes.toString("base64");
     return `data:image/jpeg;base64,${b64}`;
   } catch (error) {
-    const msg =
-      error instanceof HTTPError
-        ? `http_${error.response.status}`
-        : String(error);
-    throw new Error(`frame_fetch_failed: ${msg}`);
+    throw new Error(
+      `frame_fetch_failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 }

@@ -38,6 +38,7 @@ The AI receives the live camera frame and a goal (e.g. *"go to the kitchen"*). I
 - Neon (or any Postgres) database
 - Google Gemini API key — [aistudio.google.com](https://aistudio.google.com)
 - Bluetooth enabled on the Pi (`bluetoothctl power on`)
+- `ffmpeg` — `sudo apt install ffmpeg` (used by MediaMTX to capture JPEG snapshots)
 
 ---
 
@@ -127,9 +128,9 @@ In **Larix Broadcaster** on your iPhone:
 - **URL**: `rtmp://192.168.0.118:1935/live/stream`
 - **Stream name**: *(leave blank — it's part of the URL)*
 
-The JPEG snapshot URL the AI uses: `http://localhost:8888/live/stream/get-jpeg-snapshot`
+When Larix connects, MediaMTX spawns `ffmpeg` automatically and writes a JPEG to `/tmp/boost-snapshot.jpg` every 2 seconds. The AI server reads that file directly — no HTTP snapshot endpoint needed.
 
-> Sessions will fail with `frame_fetch_failed: http_404` if MediaMTX is running but Larix is not streaming. Start streaming before sending a goal.
+> Sessions will fail with `frame_fetch_failed: ENOENT` if Larix is not streaming (the snapshot file won't exist yet). Start streaming before sending a goal.
 
 ---
 
@@ -224,8 +225,6 @@ See `.env.example` for all variables.
 | `HUB_MAC` | — | BLE MAC address of LEGO hub |
 | `HUB_BASE_URL` | `http://localhost:8000` | Hub FastAPI URL |
 | `CORS_ORIGIN` | `http://localhost:3001` | Allowed browser origin |
-| `MEDIAMTX_BASE_URL` | `http://localhost:8888` | MediaMTX snapshot base URL |
-| `MEDIAMTX_STREAM_PATH` | `live/stream` | Stream path (matches Larix URL) |
 | `STEP_TIMEOUT_MS` | `15000` | Per-request hub timeout |
 | `VITE_API_URL` | `http://localhost:3000` | Server URL for the browser |
 
