@@ -1,5 +1,4 @@
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
-import { config } from "@boost/config";
 import { env } from "@boost/env/server";
 import { customProvider, type Provider } from "ai";
 import { createRetryable } from "ai-retry";
@@ -29,4 +28,4 @@ export const provider: Provider = customProvider({
   },
 });
 
-export { config };
+export { config } from "@boost/config";
