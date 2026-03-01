@@ -1,16 +1,13 @@
 import { tool } from "ai";
 import { z } from "zod";
-import { getHealth } from "../../../services/hub-service";
+import { hub } from "../hub";
 
 export const getHealthTool = tool({
-  description: "Check robot health and connectivity.",
+  description:
+    "Check connectivity and health of the LEGO Boost hub. Call this when the hub may be offline or when a previous action returned an error.",
   inputSchema: z.object({}),
   execute: async () => {
-    const health = await getHealth();
-    return {
-      ok: health.ok,
-      health: health.data,
-      error: health.error ?? null,
-    };
+    const result = await hub.getHealth();
+    return { ok: result.ok, health: result.data, error: result.error };
   },
 });

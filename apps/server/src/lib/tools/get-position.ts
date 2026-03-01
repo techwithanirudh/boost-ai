@@ -1,16 +1,13 @@
 import { tool } from "ai";
 import { z } from "zod";
-import { getState } from "../../../services/hub-service";
+import { hub } from "../hub";
 
 export const getPositionTool = tool({
-  description: "Get current robot position/state from hub sensors and controller status.",
+  description:
+    "Retrieve the hub's current sensor state: connection status and watchdog health. Call this to confirm operational readiness before issuing a motion command.",
   inputSchema: z.object({}),
   execute: async () => {
-    const state = await getState();
-    return {
-      ok: state.ok,
-      state: state.data,
-      error: state.error ?? null,
-    };
+    const result = await hub.getState();
+    return { ok: result.ok, state: result.data, error: result.error };
   },
 });

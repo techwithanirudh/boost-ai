@@ -1,12 +1,18 @@
+import {
+  appendAssistantIteration,
+  appendUserIteration,
+  loadConversationContext,
+  openSession,
+} from "@boost/db/queries/chat";
 import { env } from "@boost/env/server";
-import { appendAssistantIteration, appendUserIteration, loadConversationContext, openSession } from "@boost/db/queries/chat";
 import { stepRequestSchema } from "@boost/validators";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { z } from "zod";
+import { hub } from "./lib/hub";
 import { config } from "./lib/providers";
-import { executeAction, getHealth } from "./services/hub-service";
+import { decideNextAction } from "./services/ai-orchestrator";
 
 const app = new Hono();
 const missionState = new Map<string, { status: "running" | "stopped"; goal: string; updatedAt: string }>();
@@ -23,14 +29,10 @@ app.use(
 app.get("/", (c) => c.text("OK"));
 
 app.get("/v1/health", async (c) => {
-  const hub = await getHealth();
+  const hubHealth = await hub.getHealth();
   return c.json({
     ok: true,
-    data: {
-      service: "server",
-      aiModel: "chat-model",
-      hub,
-    },
+    data: { service: "server", aiModel: "chat-model", hub: hubHealth },
     error: null,
   });
 });
@@ -40,7 +42,7 @@ app.post("/v1/execute", async (c) => {
   const parsed = stepRequestSchema.safeParse(body);
 
   if (!parsed.success) {
-    return c.json({ ok: false, data: null, error: parsed.error.flatten() }, 400);
+    return c.json({ ok: false, data: null, error: parsed.error.issues }, 400);
   }
 
   try {
@@ -49,11 +51,11 @@ app.post("/v1/execute", async (c) => {
     await appendUserIteration(session.id, parsed.data);
 
     const context = await loadConversationContext(session.id, config.history.limit);
-    const aiResult = await decideNextActionWithContext(parsed.data, context);
+    const aiResult = await decideNextAction(parsed.data, context);
 
     const hubResult = parsed.data.dryRun
       ? { ok: true, data: { dryRun: true, decision: aiResult.decision }, error: null }
-      : await executeAction(aiResult.decision);
+      : await hub.executeAction(aiResult.decision);
 
     await appendAssistantIteration({
       sessionId: session.id,
@@ -65,24 +67,11 @@ app.post("/v1/execute", async (c) => {
 
     return c.json({
       ok: true,
-      data: {
-        traceId,
-        sessionId: session.id,
-        decision: aiResult.decision,
-        provider: aiResult.provider,
-        hubResult,
-      },
+      data: { traceId, sessionId: session.id, decision: aiResult.decision, provider: aiResult.provider, hubResult },
       error: null,
     });
   } catch (error) {
-    return c.json(
-      {
-        ok: false,
-        data: null,
-        error: `ai_execution_failed: ${String(error)}`,
-      },
-      500,
-    );
+    return c.json({ ok: false, data: null, error: `ai_execution_failed: ${String(error)}` }, 500);
   }
 });
 
@@ -92,7 +81,7 @@ app.post("/v1/missions/start", async (c) => {
   const parsed = schema.safeParse(body);
 
   if (!parsed.success) {
-    return c.json({ ok: false, data: null, error: parsed.error.flatten() }, 400);
+    return c.json({ ok: false, data: null, error: parsed.error.issues }, 400);
   }
 
   const missionId = parsed.data.missionId ?? crypto.randomUUID();
@@ -121,7 +110,7 @@ app.post("/v1/missions/:missionId/stop", async (c) => {
     return c.json({ ok: false, data: null, error: "mission_not_found" }, 404);
   }
 
-  const hubResult = await executeAction({
+  const hubResult = await hub.executeAction({
     action: "stop",
     value: 0,
     speed: 0.5,
@@ -151,7 +140,7 @@ app.post("/v1/missions/:missionId/step", async (c) => {
 
   const parsed = stepRequestSchema.safeParse(merged);
   if (!parsed.success) {
-    return c.json({ ok: false, data: null, error: parsed.error.flatten() }, 400);
+    return c.json({ ok: false, data: null, error: parsed.error.issues }, 400);
   }
 
   try {
@@ -160,11 +149,11 @@ app.post("/v1/missions/:missionId/step", async (c) => {
     await appendUserIteration(session.id, parsed.data);
 
     const context = await loadConversationContext(session.id, config.history.limit);
-    const aiResult = await decideNextActionWithContext(parsed.data, context);
+    const aiResult = await decideNextAction(parsed.data, context);
 
     const hubResult = parsed.data.dryRun
       ? { ok: true, data: { dryRun: true, decision: aiResult.decision }, error: null }
-      : await executeAction(aiResult.decision);
+      : await hub.executeAction(aiResult.decision);
 
     await appendAssistantIteration({
       sessionId: session.id,
@@ -189,14 +178,7 @@ app.post("/v1/missions/:missionId/step", async (c) => {
       error: null,
     });
   } catch (error) {
-    return c.json(
-      {
-        ok: false,
-        data: null,
-        error: `ai_execution_failed: ${String(error)}`,
-      },
-      500,
-    );
+    return c.json({ ok: false, data: null, error: `ai_execution_failed: ${String(error)}` }, 500);
   }
 });
 
@@ -206,16 +188,14 @@ async function waitForHubReady(): Promise<void> {
   const started = Date.now();
 
   for (;;) {
-    const health = await getHealth();
-    if (health.ok) {
-      return;
-    }
+    const health = await hub.getHealth();
+    if (health.ok) return;
 
     if (Date.now() - started > config.hub.timeoutMs) {
       throw new Error(`hub_not_ready_within_timeout: ${config.hub.timeoutMs}ms`);
     }
 
-    await new Promise((resolve) => setTimeout(resolve, config.hub.pollIntervalMs));
+    await new Promise<void>((resolve) => setTimeout(resolve, config.hub.pollIntervalMs));
   }
 }
 

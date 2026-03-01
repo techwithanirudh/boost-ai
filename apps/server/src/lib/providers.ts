@@ -1,30 +1,27 @@
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { config } from "@boost/config/ai";
-import { customProvider } from "ai";
-import { createRetryable } from "ai-retry";
 import { env } from "@boost/env/server";
+import { type Provider, customProvider } from "ai";
+import { createRetryable } from "ai-retry";
 
 const google = createGoogleGenerativeAI({ apiKey: env.GOOGLE_API_KEY });
 
-const onModelError = (context: {
+const onModelError = (ctx: {
   current: { model: { provider: string; modelId: string } };
 }) => {
-  const { model } = context.current;
-  console.error(`error with model ${model.provider}/${model.modelId}, switching to next model`);
+  const { model } = ctx.current;
+  console.error(`[ai] error with ${model.provider}/${model.modelId}, switching to fallback`);
 };
 
 const chatModel = createRetryable({
-  model: google.languageModel('gemini-3-flash-preview'),
-  retries: [
-    google.languageModel('gemini-2.5-flash'),
-  ],
+  model: google.languageModel("gemini-2.5-flash"),
+  retries: [google.languageModel("gemini-2.0-flash")],
   onError: onModelError,
 });
 
-export const provider = customProvider({
+export const provider: Provider = customProvider({
   languageModels: {
     "chat-model": chatModel,
-    "summariser-model": summariserModel,
   },
 });
 

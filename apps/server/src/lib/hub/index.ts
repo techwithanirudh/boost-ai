@@ -1,67 +1,94 @@
 import { env } from "@boost/env/server";
 import type { ActionDecision } from "@boost/validators";
+import ky, { HTTPError, type KyInstance } from "ky";
 
-type HubResult = {
+// ---------------------------------------------------------------------------
+// Response shapes
+// ---------------------------------------------------------------------------
+
+export interface HubResult<T = unknown> {
   ok: boolean;
-  data?: unknown;
-  error?: unknown;
-};
+  data: T | null;
+  error: string | null;
+}
 
-export async function getHealth(): Promise<HubResult> {
-  try {
-    const response = await fetch(`${env.HUB_BASE_URL}/health`, {
-      method: "GET",
-      signal: AbortSignal.timeout(2_000),
+export interface HubHealthData {
+  service: string;
+  connected: boolean;
+}
+
+export interface HubStateData {
+  connected: boolean;
+  watchdog_expired: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// HubClient
+// ---------------------------------------------------------------------------
+
+export class HubClient {
+  private readonly http: KyInstance;
+
+  constructor(baseUrl: string, timeoutMs: number) {
+    this.http = ky.create({
+      prefixUrl: baseUrl,
+      timeout: timeoutMs,
+      retry: 0,
     });
+  }
 
-    const body = await response.json().catch(() => null);
+  async getHealth(): Promise<HubResult<HubHealthData>> {
+    try {
+      const data = await this.http.get("health").json<HubHealthData>();
+      return { ok: true, data, error: null };
+    } catch (error) {
+      return { ok: false, data: null, error: toErrorMessage(error) };
+    }
+  }
 
-    return {
-      ok: response.ok,
-      data: body,
-      error: response.ok ? null : body,
-    };
-  } catch (error) {
-    return { ok: false, error: String(error) };
+  async getState(): Promise<HubResult<HubStateData>> {
+    try {
+      const data = await this.http.get("hub/state").json<HubStateData>();
+      return { ok: true, data, error: null };
+    } catch (error) {
+      return { ok: false, data: null, error: toErrorMessage(error) };
+    }
+  }
+
+  async executeAction(decision: ActionDecision): Promise<HubResult> {
+    try {
+      const data = await this.http
+        .post("motion/execute", { json: decision })
+        .json();
+      return { ok: true, data, error: null };
+    } catch (error) {
+      return { ok: false, data: null, error: toErrorMessage(error) };
+    }
+  }
+
+  async emergencyStop(): Promise<HubResult> {
+    try {
+      const data = await this.http.post("motion/emergency-stop").json();
+      return { ok: true, data, error: null };
+    } catch (error) {
+      return { ok: false, data: null, error: toErrorMessage(error) };
+    }
   }
 }
 
-export async function getState(): Promise<HubResult> {
-  try {
-    const response = await fetch(`${env.HUB_BASE_URL}/hub/state`, {
-      method: "GET",
-      signal: AbortSignal.timeout(2_000),
-    });
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
-    const body = await response.json().catch(() => null);
-
-    return {
-      ok: response.ok,
-      data: body,
-      error: response.ok ? null : body,
-    };
-  } catch (error) {
-    return { ok: false, error: String(error) };
+function toErrorMessage(error: unknown): string {
+  if (error instanceof HTTPError) {
+    return `http_${error.response.status}: ${error.message}`;
   }
+  return String(error);
 }
 
-export async function executeAction(decision: ActionDecision): Promise<HubResult> {
-  try {
-    const response = await fetch(`${env.HUB_BASE_URL}/motion/execute`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(decision),
-      signal: AbortSignal.timeout(env.STEP_TIMEOUT_MS),
-    });
+// ---------------------------------------------------------------------------
+// Singleton — shared across the application
+// ---------------------------------------------------------------------------
 
-    const body = await response.json().catch(() => null);
-
-    return {
-      ok: response.ok,
-      data: body,
-      error: response.ok ? null : body,
-    };
-  } catch (error) {
-    return { ok: false, error: String(error) };
-  }
-}
+export const hub = new HubClient(env.HUB_BASE_URL, env.STEP_TIMEOUT_MS);
