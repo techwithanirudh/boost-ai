@@ -66,11 +66,11 @@ Fill in `.env`:
 | Variable | Description |
 |---|---|
 | `DATABASE_URL` | Neon/Postgres connection string |
-| `GOOGLE_GENERATIVE_AI_API_KEY` | Gemini API key — [aistudio.google.com](https://aistudio.google.com) |
+| `OPENAI_API_KEY` | Gemini API key — [aistudio.google.com](https://aistudio.google.com) |
 | `HUB_MAC` | BLE MAC of your LEGO hub (leave empty for auto-discover) |
-| `VITE_API_URL` | Server URL reachable from your browser (e.g. `http://192.168.0.118:3000`) |
-| `VITE_MEDIAMTX_URL` | MediaMTX WebRTC URL reachable from your browser (e.g. `http://192.168.0.118:8889`) |
-| `CORS_ORIGIN` | Browser origin (e.g. `http://192.168.0.118:3001`) |
+| `VITE_API_URL` | Server URL reachable from your browser (e.g. `http://192.168.0.123:3000`) |
+| `VITE_MEDIAMTX_URL` | MediaMTX WebRTC URL reachable from your browser (e.g. `http://192.168.0.123:8889`) |
+| `CORS_ORIGIN` | Browser origin (e.g. `http://192.168.0.123:3001`) |
 
 ### 5. Push database schema
 
@@ -108,6 +108,7 @@ Services and ports:
 In **Larix Broadcaster** on your iPhone:
 
 - **Connection URL**: `rtmp://<pi-ip>:1935/live/stream`
+- Get your Pi Wi-Fi IP: `ip addr show wlan0`
 
 Once Larix connects, MediaMTX automatically spawns ffmpeg which writes `/tmp/snapshot.jpg` every 2 s for the AI. The live WebRTC feed is embedded directly in the web UI.
 

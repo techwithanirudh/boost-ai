@@ -32,6 +32,7 @@
     "prepare": "lefthook install"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^3.0.37",
     "@boost/env": "workspace:*",
     "dotenv": "catalog:",
     "zod": "catalog:"
