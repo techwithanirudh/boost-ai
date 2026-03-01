@@ -12,6 +12,7 @@ export const env = createEnv({
     HUB_BASE_URL: z.url().default("http://localhost:8000"),
     RTSP_SNAPSHOT_URL: z.string().min(1),
     STEP_TIMEOUT_MS: z.coerce.number().int().positive().default(15_000),
+    HF_API_TOKEN: z.string().optional(),
   },
   runtimeEnv: process.env,
   emptyStringAsUndefined: true,

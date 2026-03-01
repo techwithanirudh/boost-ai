@@ -11,9 +11,9 @@ export const backwardTool = tool({
   inputSchema: z.object({
     value: z
       .number()
-      .min(5)
-      .max(30)
-      .describe("Distance to travel backward in centimetres (5-30)."),
+      .min(0.25)
+      .max(10.0)
+      .describe("Distance to travel backward in metres (0.25–10.0)."),
     speed: z
       .number()
       .min(0)
@@ -29,10 +29,11 @@ export const backwardTool = tool({
       .describe("Brief rationale for this decision (shown in logs)."),
   }),
   execute: async ({ value, speed, text }) => {
-    log.info({ value, speed, text }, `backward ${value}cm`);
+    const cm = Math.round(value * 100);
+    log.info({ value, speed, text }, `backward ${value}m (${cm}cm)`);
     const result = await hub.executeAction({
       action: "backward_cm",
-      value,
+      value: cm,
       speed,
       text,
     });

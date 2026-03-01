@@ -5,6 +5,7 @@ import { logger } from "hono/logger";
 import { execute } from "./routes/execute";
 import { health } from "./routes/health";
 import { sessions } from "./routes/sessions";
+import { snapshot } from "./routes/snapshot";
 
 const app = new Hono();
 
@@ -18,5 +19,6 @@ app.get("/", (c) => c.text("OK"));
 app.route("/v1/health", health);
 app.route("/v1/execute", execute);
 app.route("/v1/sessions", sessions);
+app.route("/v1/snapshot", snapshot);
 
 export default app;

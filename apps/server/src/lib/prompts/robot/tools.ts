@@ -8,7 +8,7 @@ Think step-by-step and issue the single best motion command.
   <when>
     Clear path ahead and target is in front according to visual evidence.
     After confident target detection, prefer fast approach using high speed (0.8-1.0)
-    and large legal distances (20-30 cm) when the path stays visually clear.
+    and large distances (1.0-5.0 m steps) when the path stays visually clear.
   </when>
 </tool>
 

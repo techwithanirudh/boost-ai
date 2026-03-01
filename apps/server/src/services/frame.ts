@@ -19,11 +19,16 @@ async function captureFrame(rtspUrl: string): Promise<Buffer> {
   return stdout;
 }
 
-export async function fetchFrame(): Promise<string> {
+export interface Frame {
+  buffer: Buffer;
+  dataUrl: string;
+}
+
+export async function fetchFrame(): Promise<Frame> {
   try {
-    const frame = await captureFrame(env.RTSP_SNAPSHOT_URL);
-    const b64 = frame.toString("base64");
-    return `data:image/jpeg;base64,${b64}`;
+    const buffer = await captureFrame(env.RTSP_SNAPSHOT_URL);
+    const dataUrl = `data:image/jpeg;base64,${buffer.toString("base64")}`;
+    return { dataUrl, buffer };
   } catch (error) {
     throw new Error(
       `frame_fetch_failed: ${error instanceof Error ? error.message : String(error)}`

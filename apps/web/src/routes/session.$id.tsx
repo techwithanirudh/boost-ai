@@ -1,6 +1,6 @@
 // biome-ignore lint/style/useFilenamingConvention: TanStack file routes require `$param` segments.
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,8 +16,28 @@ interface UiMessage {
   text: string;
 }
 
-const MEDIAMTX_URL =
-  import.meta.env.VITE_MEDIAMTX_URL ?? "http://localhost:8889";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
+
+function SnapshotFeed() {
+  const [src, setSrc] = useState(`${API_URL}/v1/snapshot`);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setSrc(`${API_URL}/v1/snapshot?t=${Date.now()}`);
+    }, 2000);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <img
+      alt="Camera snapshot"
+      className="h-full w-full bg-black object-contain"
+      height={480}
+      src={src}
+      width={640}
+    />
+  );
+}
 
 export const Route = createFileRoute("/session/$id")({
   component: SessionPage,
@@ -37,8 +57,6 @@ function SessionPage() {
   const abortRef = useRef<AbortController | null>(null);
   const isStreamingRef = useRef(false);
   const bootstrappedRef = useRef(false);
-
-  const streamUrl = useMemo(() => `${MEDIAMTX_URL}/live/stream`, []);
 
   const runGoal = useCallback(
     async (goal: string) => {
@@ -146,14 +164,9 @@ function SessionPage() {
         <ResizablePanel defaultSize="64%">
           <div className="flex h-full flex-col">
             <div className="border-b px-4 py-2 text-muted-foreground text-xs uppercase tracking-wider">
-              Stream
+              Camera (2 s refresh)
             </div>
-            <iframe
-              allow="autoplay"
-              className="h-full w-full border-0 bg-black"
-              src={streamUrl}
-              title="Live camera feed"
-            />
+            <SnapshotFeed />
           </div>
         </ResizablePanel>
         <ResizableHandle withHandle />

@@ -3,8 +3,10 @@ import type { ModelMessage, UserContent } from "ai";
 import { stepCountIs, ToolLoopAgent } from "ai";
 import { successToolCall } from "@/lib/agents/utils";
 import { robotPrompt as systemPrompt } from "@/lib/prompts/robot";
+import { contextPrompt } from "@/lib/prompts/robot/context";
 import { config, provider } from "@/lib/providers";
 import { createToolSet } from "@/lib/tools";
+import { fetchDepthMap } from "./depth";
 import { fetchFrame } from "./frame";
 
 interface RunSessionResult {
@@ -12,21 +14,89 @@ interface RunSessionResult {
   text: string;
 }
 
-async function buildMessage(goal: string): Promise<ModelMessage> {
-  const guidance =
-    "Navigation guidance: rely on camera vision and scene understanding.";
-  try {
-    const frame = await fetchFrame();
-    const userContent: UserContent = [
-      { type: "image", image: frame },
-      { type: "text", text: `Goal: ${goal}\n${guidance}` },
-    ];
-    return { role: "user", content: userContent };
-  } catch (error) {
-    const frameError = error instanceof Error ? error.message : String(error);
-    const textContent = `Goal: ${goal}\n${guidance}\nCamera frame unavailable (${frameError}). Continue with caution using only confirmed visual context.`;
-    return { role: "user", content: [{ type: "text", text: textContent }] };
+interface ToolCallPart {
+  args: Record<string, unknown>;
+  toolName: string;
+  type: "tool-call";
+}
+
+function isToolCallPart(part: unknown): part is ToolCallPart {
+  return (
+    typeof part === "object" &&
+    part !== null &&
+    (part as { type?: string }).type === "tool-call"
+  );
+}
+
+function formatMove(call: ToolCallPart): string | null {
+  const val = call.args.value as number | undefined;
+  if (call.toolName === "stop") {
+    return "stop";
   }
+  if (call.toolName === "turn") {
+    return `turn ${val}°`;
+  }
+  if (call.toolName === "forward" || call.toolName === "backward") {
+    return `${call.toolName} ${val}m`;
+  }
+  return null;
+}
+
+function extractMovementLog(messages: ModelMessage[]): string {
+  const moves: string[] = [];
+
+  for (const msg of messages) {
+    if (msg.role !== "assistant" || !Array.isArray(msg.content)) {
+      continue;
+    }
+    for (const part of msg.content) {
+      if (!isToolCallPart(part)) {
+        continue;
+      }
+      const move = formatMove(part as unknown as ToolCallPart);
+      if (move !== null) {
+        moves.push(move);
+      }
+    }
+  }
+
+  return moves.length === 0 ? "none yet" : moves.join(" → ");
+}
+
+async function buildMessage(
+  goal: string,
+  messages: ModelMessage[]
+): Promise<ModelMessage> {
+  const movementLog = extractMovementLog(messages);
+
+  let frame: Awaited<ReturnType<typeof fetchFrame>> | null = null;
+  try {
+    frame = await fetchFrame();
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    return {
+      role: "user",
+      content: [
+        {
+          type: "text",
+          text: `${contextPrompt(goal, movementLog, false)}\nCamera unavailable (${msg}). Continue with caution.`,
+        },
+      ],
+    };
+  }
+
+  const depthMap = await fetchDepthMap(frame.buffer).catch(() => null);
+  const hasDepth = depthMap !== null;
+
+  const userContent: UserContent = [
+    { type: "image", image: frame.dataUrl },
+    ...(hasDepth
+      ? ([{ type: "image", image: depthMap as string }] satisfies UserContent)
+      : ([] satisfies UserContent)),
+    { type: "text", text: contextPrompt(goal, movementLog, hasDepth) },
+  ];
+
+  return { role: "user", content: userContent };
 }
 
 export async function runSession(
@@ -49,8 +119,7 @@ export async function runSession(
       openai: {
         parallelToolCalls: true,
         reasoningEffort: "minimal",
-        textVerbosity: 'low'
-        // ...
+        textVerbosity: "low",
       },
     },
     tools,
@@ -58,7 +127,7 @@ export async function runSession(
   });
 
   for (let iteration = 0; iteration < config.ai.maxSteps; iteration += 1) {
-    messages.push(await buildMessage(goal));
+    messages.push(await buildMessage(goal, messages));
 
     const stepResult = await agent.generate({ messages });
     messages.push(...stepResult.response.messages);

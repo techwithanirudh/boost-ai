@@ -10,7 +10,7 @@ Before calling any terminal tool, silently reason through:
 
 Speed policy after target detection:
 - Once the person/target is confidently detected and centered, prioritize fast approach.
-- Prefer high speed (0.8-1.0) and large legal forward steps (20-30 cm) when path is visually clear.
+- Prefer high speed (0.8-1.0) and large forward steps (1.0-5.0 m) when path is visually clear.
 - Do NOT downshift unless tool execution repeatedly fails.
 
 Turn / scan policy:
