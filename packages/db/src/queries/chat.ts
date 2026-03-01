@@ -1,135 +1,83 @@
-import { desc, eq } from "drizzle-orm";
-import type { ActionDecision, StepRequest } from "@boost/validators";
+import type { ModelMessage } from "ai";
+import { eq } from "drizzle-orm";
 import { db } from "../index";
-import { aiMessages, aiSessions } from "../schema";
+import { aiSessions } from "../schema";
 
-type SessionRow = typeof aiSessions.$inferSelect;
+export type SessionRow = typeof aiSessions.$inferSelect;
 
-export type ConversationContext = {
-  sessionId: string;
-  rollingSummary: string;
-  recentHistory: string;
-};
+// ---------------------------------------------------------------------------
+// Session management
+// ---------------------------------------------------------------------------
 
-function buildUserContent(input: StepRequest): string {
-  return [
-    `goal=${input.goal}`,
-    `scene=${input.observation.scene ?? ""}`,
-    `depth=${input.observation.depthSummary ?? ""}`,
-    `frameRef=${input.observation.frameRef ?? ""}`,
-  ].join(" | ");
-}
+export async function getOrCreateSession(params: {
+  id: string;
+  goal: string;
+  missionId?: string;
+}): Promise<SessionRow> {
+  const existing = await db
+    .select()
+    .from(aiSessions)
+    .where(eq(aiSessions.id, params.id))
+    .limit(1);
 
-function summarizeHistory(lines: string[]): string {
-  if (lines.length === 0) {
-    return "No prior history.";
-  }
-
-  return lines.slice(-6).join(" || ").slice(0, 1500);
-}
-
-export async function openSession(input: StepRequest): Promise<SessionRow> {
-  if (input.sessionId) {
-    const existing = await db.select().from(aiSessions).where(eq(aiSessions.id, input.sessionId)).limit(1);
-    if (existing[0]) {
-      await db
-        .update(aiSessions)
-        .set({ goal: input.goal, missionId: input.missionId ?? existing[0].missionId, updatedAt: new Date() })
-        .where(eq(aiSessions.id, input.sessionId));
-      return {
-        ...existing[0],
-        goal: input.goal,
-        missionId: input.missionId ?? existing[0].missionId,
+  if (existing[0]) {
+    const updated = await db
+      .update(aiSessions)
+      .set({
+        goal: params.goal,
+        missionId: params.missionId ?? existing[0].missionId,
         updatedAt: new Date(),
-      };
-    }
+      })
+      .where(eq(aiSessions.id, params.id))
+      .returning();
+    return updated[0]!;
   }
-
-  const id = input.sessionId ?? crypto.randomUUID();
 
   const created = await db
     .insert(aiSessions)
     .values({
-      id,
-      missionId: input.missionId ?? null,
-      goal: input.goal,
-      rollingSummary: null,
+      id: params.id,
+      missionId: params.missionId ?? null,
+      goal: params.goal,
+      messages: [],
       updatedAt: new Date(),
     })
     .returning();
 
-  if (!created[0]) {
-    throw new Error("failed_to_create_session");
-  }
-
+  if (!created[0]) throw new Error("failed_to_create_session");
   return created[0];
 }
 
-export async function appendUserIteration(sessionId: string, input: StepRequest): Promise<void> {
-  await db.insert(aiMessages).values({
-    sessionId,
-    role: "user",
-    content: buildUserContent(input),
-    decision: null,
-    hubResult: null,
-    toolCalls: null,
-  });
+// ---------------------------------------------------------------------------
+// Message persistence (AI SDK ModelMessage[] pattern)
+// ---------------------------------------------------------------------------
+
+/**
+ * Load the stored ModelMessage[] for a session, trimmed to the most recent
+ * `limit` entries so the context window stays bounded.
+ */
+export async function loadMessages(sessionId: string, limit: number): Promise<ModelMessage[]> {
+  const rows = await db
+    .select({ messages: aiSessions.messages })
+    .from(aiSessions)
+    .where(eq(aiSessions.id, sessionId))
+    .limit(1);
+
+  const stored = (rows[0]?.messages ?? []) as ModelMessage[];
+  return stored.slice(-limit);
 }
 
-export async function appendAssistantIteration(params: {
-  sessionId: string;
-  decision: ActionDecision;
-  hubResult: unknown;
-  toolCalls?: unknown;
-  historyLimit?: number;
-}): Promise<void> {
-  await db.insert(aiMessages).values({
-    sessionId: params.sessionId,
-    role: "assistant",
-    content: params.decision.text,
-    decision: params.decision as any,
-    hubResult: params.hubResult as any,
-    toolCalls: (params.toolCalls ?? null) as any,
-  });
-
-  const rows = await db
-    .select({ role: aiMessages.role, content: aiMessages.content })
-    .from(aiMessages)
-    .where(eq(aiMessages.sessionId, params.sessionId))
-    .orderBy(desc(aiMessages.createdAt))
-    .limit(params.historyLimit ?? 12);
-
-  const lines = rows
-    .slice()
-    .reverse()
-    .map((row) => `${row.role}: ${row.content}`);
-
+/**
+ * Persist the updated message array, trimmed to `limit` before writing
+ * so the JSONB column stays bounded.
+ */
+export async function saveMessages(
+  sessionId: string,
+  messages: ModelMessage[],
+  limit: number,
+): Promise<void> {
   await db
     .update(aiSessions)
-    .set({ rollingSummary: summarizeHistory(lines), updatedAt: new Date() })
-    .where(eq(aiSessions.id, params.sessionId));
-}
-
-export async function loadConversationContext(sessionId: string, historyLimit = 12): Promise<ConversationContext> {
-  const session = await db.select().from(aiSessions).where(eq(aiSessions.id, sessionId)).limit(1);
-  const row = session[0];
-
-  const messages = await db
-    .select({ role: aiMessages.role, content: aiMessages.content })
-    .from(aiMessages)
-    .where(eq(aiMessages.sessionId, sessionId))
-    .orderBy(desc(aiMessages.createdAt))
-    .limit(historyLimit);
-
-  const recentHistory = messages
-    .slice()
-    .reverse()
-    .map((m) => `${m.role}: ${m.content}`)
-    .join("\n");
-
-  return {
-    sessionId,
-    rollingSummary: row?.rollingSummary ?? "No prior summary.",
-    recentHistory,
-  };
+    .set({ messages: messages.slice(-limit) as unknown[], updatedAt: new Date() })
+    .where(eq(aiSessions.id, sessionId));
 }

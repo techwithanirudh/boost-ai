@@ -13,18 +13,6 @@ import {
 } from "@/lib/tools";
 import { successToolCall } from "./utils";
 
-// ---------------------------------------------------------------------------
-// Orchestrator
-// ---------------------------------------------------------------------------
-
-/**
- * Creates a ToolLoopAgent for one robot control step.
- *
- * Flow:
- *   1. Agent optionally calls getHubHealth / getPosition for diagnostics.
- *   2. Agent calls exactly one motion tool (forward, backward, turn, stop).
- *   3. Loop terminates on successToolCall on the motion tool, or after 10 steps.
- */
 export function orchestratorAgent({
   input,
   context,
@@ -37,10 +25,8 @@ export function orchestratorAgent({
     instructions: systemPrompt(input, context),
     toolChoice: "required",
     tools: {
-      // Diagnostic — may be called before deciding
       getHubHealth: getHealthTool,
       getPosition: getPositionTool,
-      // Motion — terminal; loop ends on first successful call
       forward: forwardTool,
       backward: backwardTool,
       turn: turnTool,
