@@ -1,16 +1,6 @@
 export const toolsPrompt = `\
 <tools>
-Think step-by-step: check hub status if uncertain →
-then issue the single best motion command.
-
-<tool>
-  <name>getHubHealth</name>
-  <description>
-    Check connectivity and health of the LEGO Boost hub.
-    Returns: { ok, health: { service, connected }, error }.
-    Call this before any motion when: a previous action returned an error or hub state is unknown.
-  </description>
-</tool>
+Think step-by-step and issue the single best motion command.
 
 <tool>
   <name>forward</name>
@@ -45,7 +35,7 @@ then issue the single best motion command.
   <name>stop</name>
   <description>Halt all motion immediately. The loop ends after a successful call.</description>
   <when>
-    Use only for immediate danger, hub offline, or unresolved critical error.
+    Use only for immediate danger or unresolved critical execution error.
     Never use stop for blank/unreadable view recovery.
     Do NOT stop just because progress is slow or uncertain; continue navigating.
     Do NOT use to signal goal completion, use complete for that.

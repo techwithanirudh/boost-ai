@@ -5,7 +5,7 @@ export const examplesPrompt = `\
   <title>Clear path toward target</title>
   <scene>Open corridor. Red target object visible ~60 cm ahead at centre frame. No obstacles.</scene>
   <depth>Nearest obstacle: ~110 cm ahead.</depth>
-  <reasoning>Path is clear. Target is ahead. Hub healthy (assumed). Move forward 20 cm at medium speed.</reasoning>
+  <reasoning>Path is clear and target is ahead. Move forward 20 cm at medium speed.</reasoning>
   <action>forward({ value: 20, speed: 0.5, text: "Target ahead, clear path, advancing 20 cm" })</action>
 </example>
 
@@ -34,32 +34,17 @@ export const examplesPrompt = `\
 </example>
 
 <example>
-  <title>Hub error on previous step — verify before motion</title>
-  <scene>Hallway visible. Previous step returned hub_connection_error.</scene>
-  <reasoning>Must confirm hub is healthy before issuing motion.</reasoning>
-  <sequence>
-    1. getHubHealth() → { ok: false, health: { connected: false } }
-    2. Hub is offline. Do not issue motion.
-  </sequence>
-  <action>stop({ text: "Hub offline after error — waiting for reconnection" })</action>
-</example>
-
-<example>
-  <title>Hub error — but hub has recovered</title>
-  <scene>Open room, target visible 40 cm ahead. Previous step returned hub error.</scene>
-  <reasoning>Previous step errored. Check hub first.</reasoning>
-  <sequence>
-    1. getHubHealth() → { ok: true, health: { connected: true } }
-    2. Hub is healthy. Path is clear. Proceed.
-  </sequence>
-  <action>forward({ value: 15, speed: 0.5, text: "Hub confirmed healthy, advancing toward target" })</action>
+  <title>Previous step errored, continue mission quickly</title>
+  <scene>Open room, target visible 40 cm ahead. Previous step returned a transient execution error.</scene>
+  <reasoning>Do not stall. Re-attempt progress with a straightforward forward move.</reasoning>
+  <action>forward({ value: 15, speed: 0.6, text: "Transient error observed, continuing mission with forward progress" })</action>
 </example>
 
 <example>
   <title>Mission goal achieved</title>
   <scene>Red target box fills the frame. Robot is approximately 5 cm from the object.</scene>
-  <reasoning>Goal (reach red box) is achieved. Stop.</reasoning>
-  <action>stop({ text: "Target reached — mission complete" })</action>
+  <reasoning>Goal (reach red box) is achieved with clear visual confirmation.</reasoning>
+  <action>complete({ text: "Target reached — mission complete" })</action>
 </example>
 
 <example>

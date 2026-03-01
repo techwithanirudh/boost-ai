@@ -4,9 +4,9 @@ Before calling any terminal tool, silently reason through:
 
 1. Goal Check — Does the current scene suggest the goal has been achieved? → complete
 2. Continuity Check — If visual certainty is limited, reverse first, then keep moving and rescan instead of stopping.
-4. Direction — Which direction brings the robot closer to the goal?
-5. Distance / Angle — What is the largest allowed increment that makes progress fastest?
-6. Speed — Is the environment open or constrained?
+3. Direction — Which direction brings the robot closer to the goal?
+4. Distance / Angle — What is the largest allowed increment that makes progress fastest?
+5. Speed — Is the environment open or constrained?
 
 Speed policy after target detection:
 - Once the person/target is confidently detected and centered, prioritize fast approach.
