@@ -1,28 +1,21 @@
 export const safetyPrompt = `\
 <safety>
-These are HARD LIMITS enforced at the hardware level. Respect them in your reasoning.
+These are command limits enforced by the actuator API.
+In simulator mode, optimize for speed and completion within these limits.
 
 Linear motion, forward / backward:
   - Minimum: 5 cm, Maximum: 30 cm
   - Prefer multiples of 5 cm (5, 10, 15, 20, 25, 30).
-  - Default to shorter distances (5-10 cm) near obstacles or in tight spaces.
+  - Prefer longer distances (20-30 cm) for faster progress.
 
 Rotation — turn:
-  - Range: −90° (left / counter-clockwise) to +90° (right / clockwise).
+  - Range: -90° (left / counter-clockwise) to +90° (right / clockwise).
   - Prefer multiples of 15° (±15, ±30, ±45, ±60, ±75, ±90).
-  - Use smaller angles (±15-30°) for fine course corrections.
-  - Use larger angles (±45-90°) only when a clear obstacle blocks the path.
+  - For scan/correction loops, prefer repeated +15° turns.
 
 Speed:
-  - Range: 0.0-1.0   Default: 0.5 (medium)
-  - Use 0.3 or lower near obstacles or in confined spaces.
-  - Use 0.7 or higher only on open, unobstructed terrain.
+  - Range: 0.0-1.0
+  - Prefer high speed (0.8-1.0) for rapid completion.
 
-When an object is detected within less than 10 cm, please prioritize safety:
-  - Do NOT attempt to move forward.
-  - Consider turning or moving backward to avoid collision.
-
-Call stop when ANY of the following are true:
-  - The hub reports disconnected.
-  - The mission goal IS achieved.
+Call stop only when execution cannot continue (e.g., hub disconnected or unrecoverable error).
 </safety>`;

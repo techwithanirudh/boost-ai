@@ -1,6 +1,6 @@
 export const toolsPrompt = `\
 <tools>
-Think step-by-step: check hub status if uncertain → inspect position state if needed →
+Think step-by-step: check hub status if uncertain →
 then issue the single best motion command.
 
 <tool>
@@ -13,19 +13,13 @@ then issue the single best motion command.
 </tool>
 
 <tool>
-  <name>getPosition</name>
-  <description>
-    Retrieve position details including connected status and distance
-    from the LEGO BOOST distance sensor to the nearest object.
-    Returns: { ok, details: { connected, distance }, error }.
-    Call this when you need a fresh, reliable distance reading or readiness check before motion.
-  </description>
-</tool>
-
-<tool>
   <name>forward</name>
   <description>Move the robot forward. Terminal — the loop ends after a successful call.</description>
-  <when>Clear path ahead, target is in front, no obstacles within 30 cm.</when>
+  <when>
+    Clear path ahead and target is in front according to visual evidence.
+    After confident target detection, prefer fast approach using high speed (0.8-1.0)
+    and large legal distances (20-30 cm) when the path stays visually clear.
+  </when>
 </tool>
 
 <tool>
@@ -47,7 +41,11 @@ then issue the single best motion command.
 <tool>
   <name>stop</name>
   <description>Halt all motion immediately. Terminal — the loop ends after a successful call.</description>
-  <when>Scene is unclear / unsafe / hub offline / previous error unresolved. Do NOT use to signal goal completion — use complete for that.</when>
+  <when>
+    Use only for immediate danger, hub offline, or unresolved critical error.
+    Do NOT stop just because progress is slow or uncertain; continue navigating.
+    Do NOT use to signal goal completion — use complete for that.
+  </when>
 </tool>
 
 <tool>

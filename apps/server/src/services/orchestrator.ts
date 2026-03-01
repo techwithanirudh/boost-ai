@@ -2,7 +2,6 @@ import { loadMessages, saveMessages } from "@boost/db/queries/sessions";
 import type { ModelMessage, UserContent } from "ai";
 import { stepCountIs, ToolLoopAgent } from "ai";
 import { successToolCall } from "@/lib/agents/utils";
-import { hub } from "@/lib/hub";
 import { robotPrompt as systemPrompt } from "@/lib/prompts/robot";
 import { config, provider } from "@/lib/providers";
 import { createToolSet } from "@/lib/tools";
@@ -14,34 +13,20 @@ interface RunSessionResult {
 }
 
 async function buildMessage(goal: string): Promise<ModelMessage> {
-  const sensor = await getSensorContext();
+  const guidance =
+    "Navigation guidance: rely on camera vision and scene understanding.";
   try {
     const frame = await fetchFrame();
     const userContent: UserContent = [
       { type: "image", image: frame },
-      { type: "text", text: `Goal: ${goal}\n${sensor}` },
+      { type: "text", text: `Goal: ${goal}\n${guidance}` },
     ];
     return { role: "user", content: userContent };
   } catch (error) {
     const frameError = error instanceof Error ? error.message : String(error);
-    const textContent = `Goal: ${goal}\n${sensor}\nCamera frame unavailable (${frameError}). Continue with caution using sensor context.`;
+    const textContent = `Goal: ${goal}\n${guidance}\nCamera frame unavailable (${frameError}). Continue with caution using only confirmed visual context.`;
     return { role: "user", content: [{ type: "text", text: textContent }] };
   }
-}
-
-async function getSensorContext(): Promise<string> {
-  const state = await hub.getState();
-  if (!(state.ok && state.data)) {
-    return `Sensor context unavailable (${state.error ?? "unknown_error"}).`;
-  }
-
-  const { connected, distance } = state.data;
-  const distanceText =
-    distance === null
-      ? "distance sensor reading unavailable"
-      : `distance to nearest object: ${distance.toFixed(1)} cm`;
-
-  return `Robot details: connected=${connected}; ${distanceText}.`;
 }
 
 export async function runSession(
