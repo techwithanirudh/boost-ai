@@ -1,6 +1,9 @@
 import { tool } from "ai";
 import { z } from "zod";
+import { createLogger } from "@/lib/logger";
 import { hub } from "../hub";
+
+const log = createLogger("tool:get-position");
 
 export const getPositionTool = tool({
   description:
@@ -8,6 +11,7 @@ export const getPositionTool = tool({
   inputSchema: z.object({}),
   execute: async () => {
     const result = await hub.getState();
+    log.info({ ok: result.ok, state: result.data }, "get-position");
     return { ok: result.ok, state: result.data, error: result.error };
   },
 });

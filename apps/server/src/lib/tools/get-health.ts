@@ -1,6 +1,9 @@
 import { tool } from "ai";
 import { z } from "zod";
+import { createLogger } from "@/lib/logger";
 import { hub } from "../hub";
+
+const log = createLogger("tool:get-health");
 
 export const getHealthTool = tool({
   description:
@@ -8,6 +11,7 @@ export const getHealthTool = tool({
   inputSchema: z.object({}),
   execute: async () => {
     const result = await hub.getHealth();
+    log.info({ ok: result.ok, health: result.data }, "get-health");
     return { ok: result.ok, health: result.data, error: result.error };
   },
 });
