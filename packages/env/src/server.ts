@@ -10,6 +10,7 @@ export const env = createEnv({
       .default("development"),
     OPENAI_API_KEY: z.string().min(1),
     HUB_BASE_URL: z.url().default("http://localhost:8000"),
+    RTSP_SNAPSHOT_URL: z.string().min(1),
     STEP_TIMEOUT_MS: z.coerce.number().int().positive().default(15_000),
   },
   runtimeEnv: process.env,

@@ -13,7 +13,7 @@ export const forwardTool = tool({
       .number()
       .min(5)
       .max(30)
-      .describe("Distance to travel forward in centimetres (5–30)."),
+      .describe("Distance to travel forward in centimetres (5-30)."),
     speed: z
       .number()
       .min(0)

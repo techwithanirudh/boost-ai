@@ -19,7 +19,12 @@ export interface HubHealthData {
 
 export interface HubStateData {
   connected: boolean;
-  watchdog_expired: boolean;
+  distance: number | null;
+}
+
+interface HubStateApiEnvelope {
+  data: HubStateData;
+  ok: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -48,7 +53,10 @@ export class HubClient {
 
   async getState(): Promise<HubResult<HubStateData>> {
     try {
-      const data = await this.http.get("hub/state").json<HubStateData>();
+      const raw = await this.http
+        .get("hub/state")
+        .json<HubStateData | HubStateApiEnvelope>();
+      const data = isHubStateApiEnvelope(raw) ? raw.data : raw;
       return { ok: true, data, error: null };
     } catch (error) {
       return { ok: false, data: null, error: toErrorMessage(error) };
@@ -85,6 +93,16 @@ function toErrorMessage(error: unknown): string {
     return `http_${error.response.status}: ${error.message}`;
   }
   return String(error);
+}
+
+function isHubStateApiEnvelope(value: unknown): value is HubStateApiEnvelope {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "data" in value &&
+    typeof value.data === "object" &&
+    value.data !== null
+  );
 }
 
 // ---------------------------------------------------------------------------

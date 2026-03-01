@@ -4,14 +4,13 @@ import time
 from typing import Any
 
 from pylgbst import get_connection_bleak
-from pylgbst.hub import MoveHub
+from pylgbst.hub import MoveHub, VisionSensor
 
 from .models import ExecuteMotionCommand
 from .safety import Watchdog
 
 logger = logging.getLogger(__name__)
 
-# Rough calibration constants — tune against your robot
 _CM_PER_SEC_AT_FULL = 15.0   # cm/s at speed=1.0
 _DEG_PER_SEC_AT_FULL = 90.0  # degrees/s at speed=1.0 for a differential turn
 
@@ -23,10 +22,7 @@ class HubService:
         self._mac: str | None = os.getenv("HUB_MAC") or None
         self._stop = False
         self.watchdog = Watchdog(timeout_s=5.0)
-
-    # ------------------------------------------------------------------
-    # Lifecycle
-    # ------------------------------------------------------------------
+        self._distance: float | None = None
 
     def connect(self) -> None:
         """Blocking BLE connect with retry, runs in a thread."""
@@ -42,6 +38,7 @@ class HubService:
                 )
                 self._hub = MoveHub(conn)
                 self.connected = True
+                self._attach_distance_sensor()
                 logger.info("Connected to LEGO Boost hub %s", label)
                 return
             except Exception as exc:
@@ -61,19 +58,11 @@ class HubService:
         self._hub = None
         logger.info("Disconnected from LEGO Boost hub")
 
-    # ------------------------------------------------------------------
-    # State
-    # ------------------------------------------------------------------
-
     def state(self) -> dict[str, Any]:
         return {
             "connected": self.connected,
-            "watchdog_expired": self.watchdog.expired(),
+            "distance": self._distance,
         }
-
-    # ------------------------------------------------------------------
-    # Motion
-    # ------------------------------------------------------------------
 
     def execute(self, payload: ExecuteMotionCommand) -> dict[str, Any]:
         if not self.connected or self._hub is None:
@@ -131,10 +120,6 @@ class HubService:
         self.watchdog.pet()
         return self._ok("emergency-stop")
 
-    # ------------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------------
-
     def _ok(self, action: str, payload: ExecuteMotionCommand | None = None) -> dict[str, Any]:
         return {
             "ok": True,
@@ -147,3 +132,33 @@ class HubService:
 
     def _err(self, msg: str) -> dict[str, Any]:
         return {"ok": False, "data": None, "error": msg}
+
+    def _attach_distance_sensor(self) -> None:
+        if self._hub is None:
+            return
+
+        sensor = getattr(self._hub, "vision_sensor", None) or getattr(
+            self._hub, "color_distance_sensor", None
+        )
+        if sensor is None:
+            logger.warning("Distance sensor not available on this hub")
+            return
+
+        try:
+            sensor.subscribe(
+                self._on_color_distance_update, mode=VisionSensor.COLOR_DISTANCE_FLOAT
+            )
+            cached_distance_inches = getattr(sensor, "distance", None)
+            if isinstance(cached_distance_inches, (int, float)):
+                self._update_distance_cm(float(cached_distance_inches))
+            logger.info("Distance sensor subscribed (mode=COLOR_DISTANCE_FLOAT)")
+        except Exception as exc:
+            logger.warning("Distance sensor subscribe failed: %s", exc)
+
+    def _on_color_distance_update(self, _color: int, distance_inches: float) -> None:
+        self._update_distance_cm(distance_inches)
+
+    def _update_distance_cm(self, distance_inches: float) -> None:
+        if distance_inches < 0:
+            return
+        self._distance = round(distance_inches * 2.54, 1)

@@ -8,17 +8,17 @@ then issue the single best motion command.
   <description>
     Check connectivity and health of the LEGO Boost hub.
     Returns: { ok, health: { service, connected }, error }.
-    Call this before any motion when: a previous action returned an error, hub state is
-    unknown, or the watchdog may have expired.
+    Call this before any motion when: a previous action returned an error or hub state is unknown.
   </description>
 </tool>
 
 <tool>
   <name>getPosition</name>
   <description>
-    Retrieve the hub's current sensor state including connected status and watchdog health.
-    Returns: { ok, state: { connected, watchdog_expired }, error }.
-    Call this when you need to verify the robot is ready before issuing a motion command.
+    Retrieve position details including connected status and distance
+    from the LEGO BOOST distance sensor to the nearest object.
+    Returns: { ok, details: { connected, distance }, error }.
+    Call this when you need a fresh, reliable distance reading or readiness check before motion.
   </description>
 </tool>
 

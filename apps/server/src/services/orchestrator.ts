@@ -2,6 +2,7 @@ import { loadMessages, saveMessages } from "@boost/db/queries/sessions";
 import type { ModelMessage, UserContent } from "ai";
 import { stepCountIs, ToolLoopAgent } from "ai";
 import { successToolCall } from "@/lib/agents/utils";
+import { hub } from "@/lib/hub";
 import { robotPrompt as systemPrompt } from "@/lib/prompts/robot";
 import { config, provider } from "@/lib/providers";
 import { createToolSet } from "@/lib/tools";
@@ -11,9 +12,10 @@ export async function runSession(sessionId: string, goal: string) {
   const previous = await loadMessages(sessionId, config.history.limit);
 
   const frame = await fetchLatestFrame();
+  const sensor = await getSensorContext();
   const userContent: UserContent = [
     { type: "image", image: frame },
-    { type: "text", text: `Goal: ${goal}` },
+    { type: "text", text: `Goal: ${goal}\n${sensor}` },
   ];
 
   const messages: ModelMessage[] = [
@@ -44,4 +46,19 @@ export async function runSession(sessionId: string, goal: string) {
   );
 
   return result;
+}
+
+async function getSensorContext(): Promise<string> {
+  const state = await hub.getState();
+  if (!(state.ok && state.data)) {
+    return `Sensor context unavailable (${state.error ?? "unknown_error"}).`;
+  }
+
+  const { connected, distance } = state.data;
+  const distanceText =
+    distance === null
+      ? "distance sensor reading unavailable"
+      : `distance to nearest object: ${distance.toFixed(1)} cm`;
+
+  return `Robot details: connected=${connected}; ${distanceText}.`;
 }

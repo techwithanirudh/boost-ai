@@ -13,12 +13,12 @@ rtspAddress: :8554
 
 hls: false
 
-# RTMP – Larix pushes to rtmp://<host>:1935/live/stream
+# RTMP - Larix pushes to rtmp://<host>:1935/live/stream
 rtmp: true
 rtmpAddress: :1935
 srt: false
 
-# WebRTC – browser reads live stream from http://<host>:8889/live/stream
+# WebRTC - browser reads live stream from http://<host>:8889/live/stream
 webrtc: true
 webrtcAddress: :8889
 
