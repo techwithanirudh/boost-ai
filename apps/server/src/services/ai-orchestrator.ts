@@ -5,23 +5,11 @@ import { systemPrompt } from "../lib/ai/prompts/system";
 import { createDecisionTools } from "../lib/ai/tools";
 import { config, provider } from "../lib/providers";
 
-export async function decideNextAction(input: StepRequest): Promise<{ decision: ActionDecision; provider: string; raw?: unknown }> {
-  const result = await decideNextActionWithContext(input, {
-    rollingSummary: "No prior summary.",
-    recentHistory: "",
-  });
 
-  return {
-    decision: result.decision,
-    provider: result.provider,
-    raw: result.raw,
-  };
-}
-
-export async function decideNextActionWithContext(
+export async function decideNextAction(
   input: StepRequest,
   context: { rollingSummary: string; recentHistory: string },
-): Promise<{ decision: ActionDecision; provider: string; raw?: unknown; toolCalls?: unknown }> {
+): Promise<ActionDecision> {
   const model = provider.languageModel("chat-model");
 
   const prompt = [

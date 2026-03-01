@@ -14,14 +14,10 @@ const onModelError = (context: {
 };
 
 const chatModel = createRetryable({
-  model: google.languageModel(config.ai.chatPrimary),
-  retries: config.ai.chatRetries.map((id) => google.languageModel(id)),
-  onError: onModelError,
-});
-
-const summariserModel = createRetryable({
-  model: google.languageModel(config.ai.summariserPrimary),
-  retries: config.ai.summariserRetries.map((id) => google.languageModel(id)),
+  model: google.languageModel('gemini-3-flash-preview'),
+  retries: [
+    google.languageModel('gemini-2.5-flash'),
+  ],
   onError: onModelError,
 });
 

@@ -5,7 +5,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { z } from "zod";
-import { decideNextActionWithContext } from "./services/ai-orchestrator";
+import { config } from "./lib/providers";
 import { executeAction, getHealth } from "./services/hub-service";
 
 const app = new Hono();
@@ -48,7 +48,7 @@ app.post("/v1/execute", async (c) => {
     const session = await openSession(parsed.data);
     await appendUserIteration(session.id, parsed.data);
 
-    const context = await loadConversationContext(session.id);
+    const context = await loadConversationContext(session.id, config.history.limit);
     const aiResult = await decideNextActionWithContext(parsed.data, context);
 
     const hubResult = parsed.data.dryRun
@@ -60,6 +60,7 @@ app.post("/v1/execute", async (c) => {
       decision: aiResult.decision,
       hubResult,
       toolCalls: aiResult.toolCalls,
+      historyLimit: config.history.limit,
     });
 
     return c.json({
@@ -158,7 +159,7 @@ app.post("/v1/missions/:missionId/step", async (c) => {
     const session = await openSession(parsed.data);
     await appendUserIteration(session.id, parsed.data);
 
-    const context = await loadConversationContext(session.id);
+    const context = await loadConversationContext(session.id, config.history.limit);
     const aiResult = await decideNextActionWithContext(parsed.data, context);
 
     const hubResult = parsed.data.dryRun
@@ -170,6 +171,7 @@ app.post("/v1/missions/:missionId/step", async (c) => {
       decision: aiResult.decision,
       hubResult,
       toolCalls: aiResult.toolCalls,
+      historyLimit: config.history.limit,
     });
 
     missionState.set(missionId, { ...mission, updatedAt: new Date().toISOString() });
@@ -199,3 +201,22 @@ app.post("/v1/missions/:missionId/step", async (c) => {
 });
 
 export default app;
+
+async function waitForHubReady(): Promise<void> {
+  const started = Date.now();
+
+  for (;;) {
+    const health = await getHealth();
+    if (health.ok) {
+      return;
+    }
+
+    if (Date.now() - started > config.hub.timeoutMs) {
+      throw new Error(`hub_not_ready_within_timeout: ${config.hub.timeoutMs}ms`);
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, config.hub.pollIntervalMs));
+  }
+}
+
+await waitForHubReady();

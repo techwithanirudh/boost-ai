@@ -2,8 +2,8 @@ import { tool } from "ai";
 import { z } from "zod";
 import { getHealth } from "../../../services/hub-service";
 
-export const getHubHealthTool = tool({
-  description: "Check robot hub health and connectivity.",
+export const getHealthTool = tool({
+  description: "Check robot health and connectivity.",
   inputSchema: z.object({}),
   execute: async () => {
     const health = await getHealth();
