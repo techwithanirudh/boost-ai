@@ -14,7 +14,6 @@ logger = logging.getLogger(__name__)
 _CM_PER_SEC_AT_FULL = 15.0   # cm/s at speed=1.0
 _DEG_PER_SEC_AT_FULL = 90.0  # degrees/s at speed=1.0 for a differential turn
 
-
 class HubService:
     def __init__(self) -> None:
         self.connected = False
@@ -47,6 +46,16 @@ class HubService:
                 self._hub = hub
                 self.connected = True
                 self._attach_distance_sensor()
+                try:
+                    hub.motor_external.goto_position(
+                        -1,
+                        speed=1.0,
+                        end_state=hub.motor_external.END_STATE_HOLD,
+                        wait_complete=False,
+                    )
+                    logger.info("External motor holding at %d°", _EXTERNAL_HOLD_TARGET_DEG)
+                except Exception as exc:
+                    logger.warning("External motor initialization failed: %s", exc)
                 logger.info("Connected to LEGO Boost hub %s", label)
                 return
             except Exception as exc:
