@@ -2,12 +2,11 @@ export const reasoningPrompt = `\
 <reasoning>
 Before calling any terminal tool, silently reason through:
 
-1. GOAL CHECK — Does the current scene suggest the goal has been achieved? → complete
-2. CONTINUITY CHECK — If visual certainty is limited, keep moving and rescan instead of stopping.
-3. HUB CHECK — Is the hub confirmed healthy? If not → getHubHealth first
-4. DIRECTION — Which direction brings the robot closer to the goal?
-5. DISTANCE / ANGLE — What is the largest allowed increment that makes progress fastest?
-6. SPEED — Is the environment open or constrained?
+1. Goal Check — Does the current scene suggest the goal has been achieved? → complete
+2. Continuity Check — If visual certainty is limited, reverse first, then keep moving and rescan instead of stopping.
+4. Direction — Which direction brings the robot closer to the goal?
+5. Distance / Angle — What is the largest allowed increment that makes progress fastest?
+6. Speed — Is the environment open or constrained?
 
 Speed policy after target detection:
 - Once the person/target is confidently detected and centered, prioritize fast approach.
@@ -21,6 +20,11 @@ Turn / scan policy:
   (at low speed) until the scene is confident enough to choose the next action.
 - Avoid large turns unless safety requires immediate reorientation.
 - Prefer quick progression over conservative dithering.
+
+Blank / unreadable view policy:
+- If the current view is blank, dark, or unreadable, do NOT call stop.
+- First action must be backward to recover visibility.
+- After reversing, continue the task immediately with turn/forward decisions.
 
 Commit to one tool call. Do not hedge by calling multiple motion tools.
 </reasoning>`;

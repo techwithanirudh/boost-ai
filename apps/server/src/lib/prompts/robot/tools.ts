@@ -25,7 +25,10 @@ then issue the single best motion command.
 <tool>
   <name>backward</name>
   <description>Move the robot backward. Terminal — the loop ends after a successful call.</description>
-  <when>Need to retreat from a close obstacle or reposition before turning.</when>
+  <when>
+    Need to retreat from a close obstacle or reposition before turning.
+    If camera view is blank/unreadable, backward is required as the first recovery action.
+  </when>
 </tool>
 
 <tool>
@@ -40,11 +43,12 @@ then issue the single best motion command.
 
 <tool>
   <name>stop</name>
-  <description>Halt all motion immediately. Terminal — the loop ends after a successful call.</description>
+  <description>Halt all motion immediately. The loop ends after a successful call.</description>
   <when>
     Use only for immediate danger, hub offline, or unresolved critical error.
+    Never use stop for blank/unreadable view recovery.
     Do NOT stop just because progress is slow or uncertain; continue navigating.
-    Do NOT use to signal goal completion — use complete for that.
+    Do NOT use to signal goal completion, use complete for that.
   </when>
 </tool>
 

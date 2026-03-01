@@ -29,8 +29,8 @@ export const examplesPrompt = `\
   <title>Blurry or unreadable scene</title>
   <scene>Camera feed is motion-blurred; environment is indeterminate.</scene>
   <depth>No reliable depth data.</depth>
-  <reasoning>Cannot safely navigate. Stop until scene is readable.</reasoning>
-  <action>stop({ text: "Scene unreadable — halting for safety" })</action>
+  <reasoning>Scene is unreadable. Reverse first to recover visibility, then continue mission.</reasoning>
+  <action>backward({ value: 10, speed: 0.5, text: "Unreadable view, reversing 10 cm to recover visibility and continue" })</action>
 </example>
 
 <example>
