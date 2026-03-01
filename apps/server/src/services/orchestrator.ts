@@ -1,6 +1,7 @@
 import { loadMessages, saveMessages } from "@boost/db/queries/sessions";
 import type { ModelMessage, UserContent } from "ai";
 import { stepCountIs, ToolLoopAgent } from "ai";
+import { successToolCall } from "@/lib/agents/utils";
 import { hub } from "@/lib/hub";
 import { robotPrompt as systemPrompt } from "@/lib/prompts/robot";
 import { config, provider } from "@/lib/providers";
@@ -43,21 +44,6 @@ async function getSensorContext(): Promise<string> {
   return `Robot details: connected=${connected}; ${distanceText}.`;
 }
 
-function hasSuccessfulToolCall(
-  steps: Array<{ toolResults?: Array<{ output?: unknown; toolName: string }> }>,
-  toolName: string
-): boolean {
-  return (
-    steps
-      .at(-1)
-      ?.toolResults?.some(
-        (result) =>
-          result.toolName === toolName &&
-          (result.output as { ok?: boolean })?.ok === true
-      ) ?? false
-  );
-}
-
 export async function runSession(
   sessionId: string,
   goal: string
@@ -65,13 +51,16 @@ export async function runSession(
   const previous = await loadMessages(sessionId, config.history.limit);
   const messages: ModelMessage[] = [...previous];
   const allSteps: unknown[] = [];
+  const tools = createToolSet(sessionId);
+  const isComplete = successToolCall<typeof tools>("complete");
+  const isStop = successToolCall<typeof tools>("stop");
 
   let resultText = "";
   const agent = new ToolLoopAgent({
     model: provider.languageModel("chat-model"),
     instructions: systemPrompt(goal),
     toolChoice: "required",
-    tools: createToolSet(sessionId),
+    tools,
     stopWhen: [stepCountIs(1)],
   });
 
@@ -83,10 +72,10 @@ export async function runSession(
     allSteps.push(...stepResult.steps);
     resultText = stepResult.text;
 
-    if (hasSuccessfulToolCall(stepResult.steps, "complete")) {
+    if (isComplete({ steps: stepResult.steps })) {
       break;
     }
-    if (hasSuccessfulToolCall(stepResult.steps, "stop")) {
+    if (isStop({ steps: stepResult.steps })) {
       break;
     }
   }
