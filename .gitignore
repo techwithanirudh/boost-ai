@@ -47,6 +47,4 @@ coverage
 *.tgz
 .cache
 tmp
-
-# mediamtx
-mediamtx
+bin
