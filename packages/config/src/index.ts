@@ -1,4 +1,7 @@
 export const config = {
+  ai: {
+    maxSteps: 100,
+  },
   history: {
     limit: 35,
   },

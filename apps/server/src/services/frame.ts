@@ -19,7 +19,7 @@ async function captureFrame(rtspUrl: string): Promise<Buffer> {
   return stdout;
 }
 
-export async function fetchLatestFrame(): Promise<string> {
+export async function fetchFrame(): Promise<string> {
   try {
     const frame = await captureFrame(env.RTSP_SNAPSHOT_URL);
     const b64 = frame.toString("base64");
