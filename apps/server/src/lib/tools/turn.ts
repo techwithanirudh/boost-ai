@@ -6,18 +6,16 @@ import { captureSnapshot, snapshotToModelOutput } from "./snapshot-output";
 
 const log = createLogger("tool:turn");
 
-const DEG_PER_SEC_AT_FULL = 90.0;
-
 export const turnTool = tool({
   description:
-    "Rotate the robot in place. Positive values turn right (clockwise), negative values turn left (counter-clockwise).",
+    "Rotate the robot in place using encoder-based angle control. Positive values turn right (clockwise), negative values turn left (counter-clockwise). Accurate to within a few degrees.",
   inputSchema: z.object({
     value: z
       .number()
-      .min(-90)
-      .max(90)
+      .min(-180)
+      .max(180)
       .describe(
-        "Rotation in degrees. Negative = left, positive = right (-90 to +90)."
+        "Rotation in degrees. Negative = left, positive = right. Range: -180 to +180."
       ),
     speed: z
       .number()
@@ -35,15 +33,7 @@ export const turnTool = tool({
   }),
   execute: async ({ value, speed, text }) => {
     const dir = value >= 0 ? "right" : "left";
-    const effectiveSpeed = Math.max(0.05, speed);
-    const durationMs = Math.round(
-      (Math.abs(value) / DEG_PER_SEC_AT_FULL / effectiveSpeed) * 1000
-    );
-
-    log.info(
-      { value, speed, text },
-      `turn ${Math.abs(value)} deg ${dir} (~${durationMs}ms)`
-    );
+    log.info({ value, speed, text }, `turn ${Math.abs(value)} deg ${dir}`);
 
     const result = await hub.executeAction({
       action: "turn_deg",
@@ -57,13 +47,7 @@ export const turnTool = tool({
     }
 
     const snapshot = await captureSnapshot();
-
-    return {
-      data: result.data,
-      error: result.error,
-      ok: result.ok,
-      snapshot,
-    };
+    return { data: result.data, error: result.error, ok: result.ok, snapshot };
   },
   toModelOutput: ({ output }) => {
     const status = output.ok

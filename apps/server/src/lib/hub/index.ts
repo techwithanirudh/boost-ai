@@ -17,10 +17,17 @@ export interface HubHealthData {
   service: string;
 }
 
+export interface HubPose {
+  heading: number;
+  x: number;
+  y: number;
+}
+
 export interface HubStateData {
   battery: number | null;
   connected: boolean;
   distance: number | null;
+  pose: HubPose | null;
 }
 
 interface HubStateApiEnvelope {

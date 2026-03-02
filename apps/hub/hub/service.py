@@ -1,4 +1,5 @@
 import logging
+import math
 import os
 import time
 from typing import Any
@@ -11,10 +12,10 @@ from .safety import Watchdog
 
 logger = logging.getLogger(__name__)
 
-_DEG_PER_SEC_AT_FULL = 90.0  # degrees/s at speed=1.0 for a differential turn
-_MOTOR_DEG_PER_CM = 20.5  # encoder degrees per cm (56mm wheel diameter)
+_MOTOR_DEG_PER_CM = 20.5  # encoder degrees per cm of linear travel (56 mm wheel)
+_WHEEL_TRACK_CM = 11.0  # distance between wheel contact points (centre-to-centre)
 _EXTERNAL_HOLD_TARGET_DEG = -1
-_BATTERY_MAX_VOLTS = 9.6  # 6×AA alkaline full charge (~1.6V/cell)
+_BATTERY_MAX_VOLTS = 9.6  # 6×AA alkaline full charge (~1.6 V/cell)
 
 
 class HubService:
@@ -25,6 +26,10 @@ class HubService:
         self._stop = False
         self.watchdog = Watchdog(timeout_s=5.0)
         self._distance: float | None = None
+        # Dead-reckoning pose (origin = position at connect time)
+        self._x: float = 0.0  # metres, positive = forward from start
+        self._y: float = 0.0  # metres, positive = left from start
+        self._heading: float = 0.0  # degrees, 0 = forward, +90 = left, -90 = right
 
     def connect(self) -> None:
         """Blocking BLE connect with retry, runs in a thread."""
@@ -90,6 +95,11 @@ class HubService:
             "connected": self.connected,
             "distance": self._distance,
             "battery": battery,
+            "pose": {
+                "x": round(self._x, 3),
+                "y": round(self._y, 3),
+                "heading": round(self._heading, 1),
+            },
         }
 
     def execute(self, payload: ExecuteMotionCommand) -> dict[str, Any]:
@@ -109,24 +119,35 @@ class HubService:
                 motor_deg = int(round(dist * _MOTOR_DEG_PER_CM))
                 logger.info("forward %.1f cm → %d motor° @ speed=%.2f", dist, motor_deg, speed)
                 hub.motor_AB.angled(motor_deg, speed, speed, wait_complete=True)
+                self._accumulate_linear(dist / 100.0)
 
             elif action == "backward_cm":
                 dist = max(5.0, min(1000.0, payload.value))
                 motor_deg = int(round(dist * _MOTOR_DEG_PER_CM))
                 logger.info("backward %.1f cm → %d motor° @ speed=%.2f", dist, motor_deg, speed)
                 hub.motor_AB.angled(motor_deg, -speed, -speed, wait_complete=True)
+                self._accumulate_linear(-dist / 100.0)
 
             elif action == "turn_deg":
-                deg = max(-90.0, min(90.0, payload.value))
-                secs = abs(deg) / (_DEG_PER_SEC_AT_FULL * speed)
+                deg = max(-180.0, min(180.0, payload.value))
+                arc_cm = (abs(deg) / 360.0) * math.pi * _WHEEL_TRACK_CM
+                motor_deg = int(round(arc_cm * _MOTOR_DEG_PER_CM))
                 direction = 1.0 if deg >= 0 else -1.0
-                logger.info("turn %.1f° → %.2f s @ speed=%.2f", deg, secs, speed)
-                hub.motor_AB.timed(
-                    secs,
+                logger.info(
+                    "turn %.1f° → arc=%.2f cm, %d motor° @ speed=%.2f",
+                    deg,
+                    arc_cm,
+                    motor_deg,
+                    speed,
+                )
+
+                hub.motor_AB.angled(
+                    motor_deg,
                     direction * speed,
                     -direction * speed,
                     wait_complete=True,
                 )
+                self._accumulate_turn(deg)
 
             else:
                 return self._err(f"unknown_action: {action}")
@@ -153,12 +174,29 @@ class HubService:
         self.watchdog.pet()
         return self._ok("emergency-stop")
 
+    def _accumulate_linear(self, dist_m: float) -> None:
+        """Integrate a linear movement into x/y using current heading."""
+        rad = math.radians(self._heading)
+        self._x += dist_m * math.cos(rad)
+        self._y += dist_m * math.sin(rad)
+
+    def _accumulate_turn(self, deg: float) -> None:
+        """Integrate a turn into heading. Positive = clockwise = heading decreases (right)."""
+        self._heading = (self._heading - deg) % 360
+        if self._heading > 180:
+            self._heading -= 360
+
     def _ok(self, action: str, payload: ExecuteMotionCommand | None = None) -> dict[str, Any]:
         return {
             "ok": True,
             "data": {
                 "action": action,
                 "payload": payload.model_dump() if payload else None,
+                "pose": {
+                    "x": round(self._x, 3),
+                    "y": round(self._y, 3),
+                    "heading": round(self._heading, 1),
+                },
             },
             "error": None,
         }
@@ -199,7 +237,6 @@ class HubService:
         if distance_inches is None:
             return
 
-        # Ignore invalid/sentinel payloads (e.g. 0xFF)
         if distance_inches >= 255:
             return
 
