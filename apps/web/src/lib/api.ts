@@ -9,8 +9,17 @@ export interface SessionResult {
   text: string;
 }
 
+export interface StepEvent {
+  action: string | null;
+  movementSnapshots: string[];
+  snapshot: string | null;
+  stepIndex: number;
+  text: string;
+}
+
 export type SessionStreamEvent =
   | { type: "session_started"; sessionId: string; goal: string }
+  | ({ type: "step" } & StepEvent)
   | {
       type: "session_result";
       sessionId: string;

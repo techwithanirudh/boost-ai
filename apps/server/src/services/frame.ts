@@ -9,7 +9,7 @@ export interface Frame {
 
 export async function fetchFrame(): Promise<Frame> {
   try {
-    const buffer = await readFile(SNAPSHOT_PATH) as Buffer;
+    const buffer = (await readFile(SNAPSHOT_PATH)) as Buffer;
     const dataUrl = `data:image/jpeg;base64,${buffer.toString("base64")}`;
     return { buffer, dataUrl };
   } catch (error) {

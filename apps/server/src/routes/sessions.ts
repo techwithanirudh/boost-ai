@@ -9,7 +9,7 @@ import { z } from "zod";
 import { hub } from "@/lib/hub";
 import { requireHub } from "@/lib/hub/ready";
 import { createLogger } from "@/lib/logger";
-import { runSession } from "@/services/orchestrator";
+import { type OnStepCallback, runSession } from "@/services/orchestrator";
 
 const log = createLogger("sessions");
 
@@ -117,7 +117,10 @@ sessions.post("/stream", async (c) => {
 
     const started = Date.now();
     try {
-      const result = await runSession(sessionId, goal);
+      const onStep: OnStepCallback = (event) => {
+        write("step", event).catch(() => undefined);
+      };
+      const result = await runSession(sessionId, goal, onStep);
       const updated = await getSession(sessionId);
       const status = updated?.status ?? "running";
       const steps = result.steps.length;

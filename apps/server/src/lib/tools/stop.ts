@@ -26,6 +26,6 @@ export const stopTool = tool({
     if (!result.ok) {
       log.error({ error: result.error }, "stop failed");
     }
-    return { ok: result.ok, data: result.data, error: result.error };
+    return { action: "stop", data: result.data, error: result.error, ok: result.ok };
   },
 });

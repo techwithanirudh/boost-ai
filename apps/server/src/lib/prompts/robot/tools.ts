@@ -5,8 +5,8 @@ export const toolsPrompt = `\
   <description>Move the robot forward. </description>
   <when>
     Clear path ahead and target is in front according to visual evidence.
-    After confident target detection, prefer fast approach using high speed (0.8-1.0)
-    and large distances (1.0-5.0 m steps) when the path stays visually clear.
+    Prefer small careful steps (0.05–0.3 m) and moderate speed (0.3–0.5).
+    Use larger steps (up to 1 m) only when the path is visually confirmed wide-open.
   </when>
 </tool>
 
