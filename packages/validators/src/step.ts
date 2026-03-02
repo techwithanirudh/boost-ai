@@ -3,7 +3,6 @@ import { z } from "zod";
 export const stepRequestSchema = z.object({
   sessionId: z.string().min(1).optional(),
   missionId: z.string().min(1).optional(),
-  goal: z.string().min(1),
   /** Optional URL to a depth-pro map image served by depth-pro sidecar. */
   depthMapUrl: z.string().url().optional(),
   dryRun: z.boolean().default(false),

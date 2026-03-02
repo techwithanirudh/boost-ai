@@ -4,7 +4,6 @@ import { requireHub } from "@/lib/hub/ready";
 import { getChat } from "./get";
 import { postChat } from "./post";
 import { resumeChatStream } from "./resume";
-import { stopChat } from "./stop";
 
 export const chat = new Hono();
 
@@ -28,8 +27,4 @@ chat.get("/:id", (c) => {
 
 chat.get("/:id/stream", (c) => {
   return resumeChatStream(c.req.param("id"));
-});
-
-chat.post("/:id/stop", (c) => {
-  return stopChat(c.req.param("id"));
 });

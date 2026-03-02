@@ -36,23 +36,3 @@ export function formatValue(value: unknown): string {
 
   return JSON.stringify(value, null, 2);
 }
-
-export function formatUptime(seconds: number): string {
-  const minutes = Math.floor(seconds / 60);
-  const remainderSeconds = seconds % 60;
-  return minutes > 0
-    ? `${minutes}m ${remainderSeconds}s`
-    : `${remainderSeconds}s`;
-}
-
-export function isAbortError(error: unknown): boolean {
-  if (error instanceof DOMException) {
-    return error.name === "AbortError";
-  }
-
-  if (error instanceof Error) {
-    return error.name === "AbortError";
-  }
-
-  return false;
-}

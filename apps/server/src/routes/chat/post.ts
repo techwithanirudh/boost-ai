@@ -4,21 +4,103 @@ import {
   createUIMessageStream,
   createUIMessageStreamResponse,
   generateId,
+  type ModelMessage,
   stepCountIs,
   streamText,
   type UIMessage,
+  type UserModelMessage,
 } from "ai";
 import { z } from "zod";
 import { systemPrompt } from "@/lib/prompts/system";
 import { config, provider } from "@/lib/providers";
 import { getResumableStreamContext } from "@/lib/resume-stream";
+import { generateTitleFromUserMessage } from "@/lib/title";
 import { toolSet } from "@/lib/tools";
 
 const postBodySchema = z.object({
   id: z.string().min(1),
   message: z.any().optional(),
-  goal: z.string().optional(),
+  messages: z.array(z.any()).optional(),
 });
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+
+  return value as Record<string, unknown>;
+}
+
+function asString(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  return value;
+}
+
+function sanitizeToolImageMessages(messages: ModelMessage[]): ModelMessage[] {
+  const sanitized: ModelMessage[] = [];
+
+  for (const message of messages) {
+    if (message.role !== "tool") {
+      sanitized.push(message);
+      continue;
+    }
+
+    const mutable = structuredClone(message) as {
+      content: Record<string, unknown>[];
+      role: "tool";
+    };
+    const extractedImages: string[] = [];
+    for (const contentPart of mutable.content) {
+      const part = asRecord(contentPart);
+      if (!part) {
+        continue;
+      }
+
+      const output = asRecord(part?.output);
+      const snapshot = asString(output?.snapshot);
+
+      if (snapshot?.startsWith("data:image/")) {
+        extractedImages.push(snapshot);
+        part.output = { type: "text", value: "[Snapshot attached as image]" };
+        continue;
+      }
+
+      const outputType = asString(output?.type);
+      const outputValue = output?.value;
+      if (outputType !== "content" || !Array.isArray(outputValue)) {
+        continue;
+      }
+
+      const medias = outputValue.map((entry) => asRecord(entry));
+      const mediaImages = medias
+        .filter((media) => asString(media?.type) === "media")
+        .map((media) => asString(media?.data))
+        .filter((data): data is string => Boolean(data));
+
+      if (mediaImages.length === 0) {
+        continue;
+      }
+
+      extractedImages.push(...mediaImages);
+      part.output = { type: "text", value: "[Image sent]" };
+    }
+
+    sanitized.push(mutable as unknown as ModelMessage);
+
+    for (const image of extractedImages) {
+      const imageMessage: UserModelMessage = {
+        role: "user",
+        content: [{ type: "image", image }],
+      };
+      sanitized.push(imageMessage);
+    }
+  }
+
+  return sanitized;
+}
 
 export async function postChat(request: Request): Promise<Response> {
   const raw = await request.json().catch(() => ({}));
@@ -31,63 +113,61 @@ export async function postChat(request: Request): Promise<Response> {
     );
   }
 
-  const { id, goal, message } = parsed.data;
+  const { id, message, messages: requestedMessages } = parsed.data;
 
   const chat = await readChat(id);
   const persisted = (chat.messages ?? []) as UIMessage[];
   const incomingMessage = message as UIMessage | undefined;
+  let messages = persisted;
+  if (requestedMessages) {
+    messages = requestedMessages as UIMessage[];
+  } else if (incomingMessage) {
+    messages = [...persisted, incomingMessage];
+  }
 
-  const messages = incomingMessage
-    ? [...persisted, incomingMessage]
-    : persisted;
+  const shouldGenerateTitle =
+    chat.title === "New chat" && incomingMessage?.role === "user";
+  const titlePromise = shouldGenerateTitle
+    ? generateTitleFromUserMessage(incomingMessage)
+    : null;
 
   await saveChat({
     id,
     activeStreamId: null,
-    canceledAt: null,
-    goal: goal ?? chat.goal,
     messages,
     status: "running",
   });
 
-  const userStopSignal = new AbortController();
-  let lastCancelCheck = 0;
-
   const stream = createUIMessageStream({
-    originalMessages: messages,
+    originalMessages: requestedMessages ? messages : undefined,
     execute: async ({ writer }) => {
       const result = streamText({
         model: provider.languageModel("chat-model"),
-        system: systemPrompt(goal ?? chat.goal),
+        system: systemPrompt(),
         messages: await convertToModelMessages(messages),
         tools: toolSet,
         stopWhen: stepCountIs(config.ai.maxSteps),
-        abortSignal: userStopSignal.signal,
-        onChunk: async () => {
-          const now = Date.now();
-          if (now - lastCancelCheck < 1000) {
-            return;
-          }
-
-          lastCancelCheck = now;
-          const latest = await readChat(id);
-          if (latest.canceledAt) {
-            userStopSignal.abort("user_stop");
-          }
-        },
-        onAbort: async () => {
-          await saveChat({ id, activeStreamId: null, status: "stopped" });
+        prepareStep: ({ messages: modelMessages }) => {
+          return {
+            messages: sanitizeToolImageMessages(
+              modelMessages as ModelMessage[]
+            ),
+          };
         },
       });
 
       writer.merge(result.toUIMessageStream({ sendReasoning: true }));
+      if (titlePromise) {
+        const title = await titlePromise;
+        await saveChat({ id, title });
+        writer.write({ type: "data-chat-title", data: title });
+      }
     },
     generateId,
     onFinish: async ({ messages: finishedMessages }) => {
       await saveChat({
         id,
         activeStreamId: null,
-        canceledAt: null,
         messages: finishedMessages,
         status: "completed",
       });

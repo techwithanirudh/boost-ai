@@ -9,6 +9,7 @@ const openai = createOpenAI({
 export const provider: Provider = customProvider({
   languageModels: {
     "chat-model": openai.languageModel("gpt-5-mini"),
+    "title-model": openai.languageModel("gpt-5-mini"),
   },
 });
 

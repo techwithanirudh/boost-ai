@@ -8,7 +8,7 @@ const log = createLogger("tool:stop");
 
 export const stopTool = tool({
   description:
-    "Halt all robot motion immediately. Use when the scene is unclear, an obstacle is too close, the goal is achieved, or the hub reports an error.",
+    "Halt all robot motion immediately. Use when the scene is unclear, an obstacle is too close, the current request is achieved, or the hub reports an error.",
   inputSchema: z.object({
     text: z
       .string()

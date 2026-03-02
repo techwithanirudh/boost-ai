@@ -5,6 +5,7 @@ import {
 } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 
+import { AppHeader } from "@/components/app-header";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -45,8 +46,11 @@ function RootComponent() {
         storageKey="vite-ui-theme"
       >
         <TooltipProvider>
-          <div className="h-svh">
-            <Outlet />
+          <div className="flex h-svh flex-col">
+            <AppHeader />
+            <div className="min-h-0 flex-1">
+              <Outlet />
+            </div>
           </div>
         </TooltipProvider>
         <Toaster richColors />

@@ -20,10 +20,12 @@ export interface ToolRenderModel {
 function ToolFrame({
   children,
   icon,
+  snapshot,
   title,
 }: {
   children: ReactNode;
   icon: ReactNode;
+  snapshot?: string;
   title: string;
 }) {
   return (
@@ -34,6 +36,14 @@ function ToolFrame({
         </span>
         <p className="font-medium text-sm">{title}</p>
       </div>
+      {snapshot ? (
+        // biome-ignore lint/correctness/useImageSize: snapshot comes from camera stream
+        <img
+          alt={`${title} snapshot`}
+          className="mb-2 max-h-56 w-full rounded-md border object-contain"
+          src={snapshot}
+        />
+      ) : null}
       {children}
     </div>
   );
@@ -41,9 +51,11 @@ function ToolFrame({
 
 function ForwardBackwardTool({ tool }: { tool: ToolRenderModel }) {
   const input = asRecord(tool.input);
+  const output = asRecord(tool.output);
   const distance = asNumber(input?.value);
   const speed = asNumber(input?.speed);
   const reason = asString(input?.text);
+  const snapshot = asString(output?.snapshot) ?? undefined;
 
   const isForward = tool.toolName === "forward";
 
@@ -56,6 +68,7 @@ function ForwardBackwardTool({ tool }: { tool: ToolRenderModel }) {
           <ArrowDown className="size-3.5" />
         )
       }
+      snapshot={snapshot}
       title={isForward ? "Forward" : "Backward"}
     >
       <p className="text-muted-foreground text-xs">
@@ -71,12 +84,18 @@ function ForwardBackwardTool({ tool }: { tool: ToolRenderModel }) {
 
 function TurnTool({ tool }: { tool: ToolRenderModel }) {
   const input = asRecord(tool.input);
+  const output = asRecord(tool.output);
   const degrees = asNumber(input?.value);
   const speed = asNumber(input?.speed);
   const reason = asString(input?.text);
+  const snapshot = asString(output?.snapshot) ?? undefined;
 
   return (
-    <ToolFrame icon={<RotateCw className="size-3.5" />} title="Turn">
+    <ToolFrame
+      icon={<RotateCw className="size-3.5" />}
+      snapshot={snapshot}
+      title="Turn"
+    >
       <p className="text-muted-foreground text-xs">
         {degrees !== null ? `${degrees} deg` : "Angle unknown"}
         {speed !== null ? ` at speed ${speed}` : ""}
@@ -90,10 +109,16 @@ function TurnTool({ tool }: { tool: ToolRenderModel }) {
 
 function StopTool({ tool }: { tool: ToolRenderModel }) {
   const input = asRecord(tool.input);
+  const output = asRecord(tool.output);
   const reason = asString(input?.text);
+  const snapshot = asString(output?.snapshot) ?? undefined;
 
   return (
-    <ToolFrame icon={<OctagonX className="size-3.5" />} title="Stop">
+    <ToolFrame
+      icon={<OctagonX className="size-3.5" />}
+      snapshot={snapshot}
+      title="Stop"
+    >
       <p className="whitespace-pre-wrap text-sm">
         {reason ?? "Stop called without reason."}
       </p>
@@ -103,10 +128,16 @@ function StopTool({ tool }: { tool: ToolRenderModel }) {
 
 function CompleteTool({ tool }: { tool: ToolRenderModel }) {
   const input = asRecord(tool.input);
+  const output = asRecord(tool.output);
   const summary = asString(input?.summary);
+  const snapshot = asString(output?.snapshot) ?? undefined;
 
   return (
-    <ToolFrame icon={<Flag className="size-3.5" />} title="Complete">
+    <ToolFrame
+      icon={<Flag className="size-3.5" />}
+      snapshot={snapshot}
+      title="Complete"
+    >
       <p className="whitespace-pre-wrap text-sm">
         {summary ?? "Session marked complete."}
       </p>

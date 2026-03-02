@@ -9,7 +9,7 @@ export type ChatStatus = "running" | "stopped" | "completed";
 async function createChat(id: string): Promise<ChatRow> {
   const created = await db
     .insert(chats)
-    .values({ id, messages: [] })
+    .values({ id, messages: [], title: "New chat" })
     .returning();
 
   if (!created[0]) {
@@ -46,10 +46,9 @@ export async function readChat(id: string): Promise<ChatRow> {
 export async function saveChat(params: {
   id: string;
   activeStreamId?: string | null;
-  canceledAt?: Date | null;
-  goal?: string;
   messages?: UIMessage[];
   status?: ChatStatus;
+  title?: string;
 }): Promise<void> {
   await readChat(params.id);
 
@@ -58,14 +57,12 @@ export async function saveChat(params: {
     .set({
       activeStreamId:
         params.activeStreamId !== undefined ? params.activeStreamId : undefined,
-      canceledAt:
-        params.canceledAt !== undefined ? params.canceledAt : undefined,
-      goal: params.goal !== undefined ? params.goal : undefined,
       messages:
         params.messages !== undefined
           ? (params.messages as unknown[])
           : undefined,
       status: params.status !== undefined ? params.status : undefined,
+      title: params.title !== undefined ? params.title : undefined,
       updatedAt: new Date(),
     })
     .where(eq(chats.id, params.id));

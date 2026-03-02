@@ -1,9 +1,9 @@
 // biome-ignore lint/style/useFilenamingConvention: TanStack file routes require `$param` segments.
 import { useChat } from "@ai-sdk/react";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { DefaultChatTransport } from "ai";
-import { Activity, Camera, ChevronLeft, ShieldAlert } from "lucide-react";
-import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { createFileRoute } from "@tanstack/react-router";
+import { DefaultChatTransport, type UIMessage } from "ai";
+import { Bot, ShieldAlert } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   Conversation,
@@ -16,20 +16,52 @@ import {
   MessageContent,
   MessageResponse,
 } from "@/components/ai-elements/message";
-import { ModeToggle } from "@/components/mode-toggle";
+import {
+  PromptInput,
+  PromptInputBody,
+  PromptInputButton,
+  PromptInputFooter,
+  type PromptInputMessage,
+  PromptInputSubmit,
+  PromptInputTextarea,
+  PromptInputTools,
+} from "@/components/ai-elements/prompt-input";
+import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Tool } from "@/components/tool";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
-import { asRecord, asString, formatUptime } from "@/lib/utils";
+import { asRecord, asString } from "@/lib/utils";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
+interface ChatRecord {
+  messages?: UIMessage[];
+}
+
+interface ChatResponse {
+  data?: ChatRecord;
+}
+
+interface HealthResponse {
+  data?: {
+    hub?: {
+      error?: string | null;
+      ok?: boolean;
+    };
+  };
+}
 
 export const Route = createFileRoute("/session/$id")({
+  loader: async ({ params }) => {
+    const response = await fetch(`/api/v1/chat/${params.id}`).catch(() => null);
+    if (!response?.ok) {
+      return { messages: [] as UIMessage[] };
+    }
+
+    const payload = (await response.json()) as ChatResponse;
+    const data = payload.data;
+    return {
+      messages: data?.messages ?? [],
+    };
+  },
   component: SessionPage,
-  validateSearch: (search: Record<string, unknown>) => ({
-    goal: typeof search.goal === "string" ? search.goal : "",
-  }),
 });
 
 function stateLabel(status: string): string {
@@ -44,29 +76,17 @@ function stateLabel(status: string): string {
   return "ready";
 }
 
-function statusDotClass(status: string): string {
-  if (status === "streaming" || status === "submitted") {
-    return "bg-emerald-500";
-  }
-
-  if (status === "error") {
-    return "bg-destructive";
-  }
-
-  return "bg-muted-foreground";
-}
-
 function SessionPage() {
   const { id } = Route.useParams();
-  const { goal: initialGoal } = Route.useSearch();
+  const chat = Route.useLoaderData();
+  const [hubOk, setHubOk] = useState<boolean | null>(null);
+  const [hubError, setHubError] = useState<string | null>(null);
 
-  const [uptime, setUptime] = useState(0);
-  const [promptText, setPromptText] = useState("");
-  const [sentInitialGoal, setSentInitialGoal] = useState(false);
-  const startTimeRef = useRef<number | null>(null);
+  const initialMessages = useMemo(() => chat.messages ?? [], [chat.messages]);
 
   const { messages, sendMessage, status, stop } = useChat({
     id,
+    messages: initialMessages,
     resume: true,
     transport: new DefaultChatTransport({
       api: "/api/v1/chat",
@@ -79,7 +99,6 @@ function SessionPage() {
         return {
           body: {
             id: chatId,
-            goal: initialGoal,
             message: lastMessage,
           },
         };
@@ -118,111 +137,57 @@ function SessionPage() {
     [messages]
   );
 
-  const toolSnapshots = useMemo(
-    () =>
-      toolEvents
-        .map((tool) => {
-          const output = asRecord(tool.output);
-          return asString(output?.snapshot);
-        })
-        .filter((snapshot): snapshot is string => Boolean(snapshot)),
-    [toolEvents]
-  );
-
-  const latestSnapshot =
-    toolSnapshots.at(-1) ?? `${API_URL}/v1/snapshot?t=${Date.now()}`;
-
   useEffect(() => {
-    if (!(status === "streaming" || status === "submitted")) {
-      return;
-    }
-
-    startTimeRef.current = Date.now();
-    setUptime(0);
-
-    const timerId = setInterval(() => {
-      if (startTimeRef.current !== null) {
-        setUptime(Math.floor((Date.now() - startTimeRef.current) / 1000));
+    const loadHubHealth = async () => {
+      const response = await fetch("/api/v1/health").catch(() => null);
+      if (!response?.ok) {
+        setHubOk(false);
+        setHubError("health_request_failed");
+        return;
       }
-    }, 1000);
 
-    return () => {
-      clearInterval(timerId);
+      const payload = (await response.json()) as HealthResponse;
+      const hub = payload.data?.hub;
+      setHubOk(Boolean(hub?.ok));
+      setHubError(hub?.error ?? null);
     };
-  }, [status]);
 
-  useEffect(() => {
-    if (!initialGoal || sentInitialGoal || messages.length > 0) {
-      return;
-    }
-
-    setSentInitialGoal(true);
-    sendMessage({ text: initialGoal });
-  }, [initialGoal, messages.length, sendMessage, sentInitialGoal]);
+    loadHubHealth();
+    const interval = setInterval(loadHubHealth, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   const isRunning = status === "streaming" || status === "submitted";
-
-  const emergencyStop = async () => {
-    stop();
-
-    const res = await fetch(`/api/v1/chat/${id}/stop`, {
-      method: "POST",
-    }).catch(() => null);
-
-    if (!res?.ok) {
-      toast.error("Emergency stop failed");
-      return;
+  const hubStatusLabel = (() => {
+    if (hubOk === null) {
+      return "checking";
     }
 
-    toast.warning("Emergency stop sent");
-  };
+    if (hubOk) {
+      return "online";
+    }
 
-  const submitPrompt = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const trimmed = promptText.trim();
+    return "offline";
+  })();
+  const hubStatusClass = (() => {
+    if (hubOk === null) {
+      return "text-muted-foreground";
+    }
+    return hubOk ? "text-emerald-500" : "text-destructive";
+  })();
+
+  const submitPrompt = ({ text }: PromptInputMessage) => {
+    const trimmed = text.trim();
     if (!trimmed) {
       return;
     }
 
     sendMessage({ text: trimmed });
-    setPromptText("");
   };
-
-  const title = initialGoal?.trim() || "Robot Chat";
 
   return (
     <main className="grid h-full min-h-0 gap-3 p-3 md:grid-cols-[minmax(0,1fr)_320px]">
-      <section className="grid min-h-0 grid-rows-[auto_1fr_auto] gap-3">
-        <Card className="flex items-center gap-3 border p-3">
-          <Link
-            className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs hover:bg-muted"
-            to="/"
-          >
-            <ChevronLeft className="size-3.5" />
-            Home
-          </Link>
-
-          <div className="min-w-0">
-            <p className="truncate font-medium text-sm">{title}</p>
-            <p className="text-muted-foreground text-xs">Chat Pane</p>
-          </div>
-
-          <span
-            className={`ml-auto inline-block size-2.5 rounded-full ${statusDotClass(status)}`}
-          />
-
-          <Button
-            onClick={emergencyStop}
-            size="sm"
-            type="button"
-            variant="destructive"
-          >
-            Stop Session
-          </Button>
-
-          <ModeToggle />
-        </Card>
-
+      <section className="grid min-h-0 grid-rows-[1fr_auto] gap-3">
         <Card className="min-h-0 overflow-hidden border p-0">
           <Conversation>
             <ConversationContent className="px-3 py-3">
@@ -268,97 +233,63 @@ function SessionPage() {
                 ))
               ) : (
                 <ConversationEmptyState
-                  description="Send your first goal to start tool-driven robot chat."
+                  description="Send your first message to start the chat."
                   title="No messages yet"
                 />
               )}
+              {isRunning ? <Shimmer className="mt-3 h-12 w-full" /> : null}
             </ConversationContent>
             <ConversationScrollButton />
           </Conversation>
         </Card>
 
-        <Card className="border p-2">
-          <form className="space-y-2" onSubmit={submitPrompt}>
-            <Textarea
-              onChange={(event) => setPromptText(event.target.value)}
-              placeholder="Add new goal / follow-up"
-              rows={3}
-              value={promptText}
-            />
-            <div className="flex items-center justify-between">
-              <Button
+        <PromptInput onSubmit={submitPrompt}>
+          <PromptInputBody>
+            <PromptInputTextarea placeholder="Type a message..." />
+          </PromptInputBody>
+          <PromptInputFooter>
+            <PromptInputTools>
+              <PromptInputButton
                 disabled={!isRunning}
-                onClick={emergencyStop}
-                type="button"
+                onClick={stop}
                 variant="destructive"
               >
                 Stop
-              </Button>
-              <Button disabled={!promptText.trim()} type="submit">
-                Send
-              </Button>
-            </div>
-          </form>
-        </Card>
+              </PromptInputButton>
+            </PromptInputTools>
+            <PromptInputSubmit status={status} />
+          </PromptInputFooter>
+        </PromptInput>
       </section>
 
-      <aside className="flex min-h-0 flex-col gap-3">
-        <Card className="border p-3">
-          <p className="mb-3 font-medium text-sm">Diagnostics</p>
+      <aside className="flex h-full min-h-0 flex-col gap-3">
+        <Card className="min-h-0 flex-1 border p-3">
+          <p className="mb-3 font-medium text-sm">System Status</p>
           <dl className="space-y-2 text-sm">
             <div className="flex items-center justify-between">
               <dt className="flex items-center gap-2 text-muted-foreground">
-                <Activity className="size-4" />
-                Uptime
-              </dt>
-              <dd>{formatUptime(uptime)}</dd>
-            </div>
-            <div className="flex items-center justify-between">
-              <dt className="flex items-center gap-2 text-muted-foreground">
                 <ShieldAlert className="size-4" />
-                Status
+                Chat
               </dt>
               <dd className="capitalize">{stateLabel(status)}</dd>
             </div>
             <div className="flex items-center justify-between">
               <dt className="flex items-center gap-2 text-muted-foreground">
-                <Camera className="size-4" />
-                Frames
+                <Bot className="size-4" />
+                Hub
               </dt>
-              <dd>{toolSnapshots.length}</dd>
+              <dd className={hubStatusClass}>{hubStatusLabel}</dd>
             </div>
+            <div className="flex items-center justify-between">
+              <dt className="text-muted-foreground">Tool Calls</dt>
+              <dd>{toolEvents.length}</dd>
+            </div>
+            {hubError ? (
+              <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-destructive text-xs">
+                {hubError}
+              </div>
+            ) : null}
           </dl>
-        </Card>
-
-        <Card className="overflow-hidden border p-0">
-          {/* biome-ignore lint/correctness/useImageSize: dynamic stream frame size */}
-          <img
-            alt="Latest session snapshot"
-            className="h-52 w-full object-contain"
-            src={latestSnapshot}
-          />
-        </Card>
-
-        <Card className="min-h-0 flex-1 overflow-y-auto border p-3">
-          <p className="mb-3 font-medium text-sm">Recent Frames</p>
-          <div className="space-y-2">
-            {toolSnapshots.length > 0 ? (
-              toolSnapshots
-                .slice(-8)
-                .reverse()
-                .map((frame) => (
-                  // biome-ignore lint/correctness/useImageSize: dynamic stream frame size
-                  <img
-                    alt="Recent frame"
-                    className="w-full rounded-lg border object-contain"
-                    key={frame}
-                    src={frame}
-                  />
-                ))
-            ) : (
-              <p className="text-muted-foreground text-sm">No frames yet.</p>
-            )}
-          </div>
         </Card>
       </aside>
     </main>
