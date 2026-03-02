@@ -1,5 +1,5 @@
 import type { UIMessage } from "ai";
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { db } from "../index";
 import { chats } from "../schema";
 
@@ -17,6 +17,16 @@ async function createChat(id: string): Promise<ChatRow> {
   }
 
   return created[0];
+}
+
+export async function listChats(limit = 50): Promise<ChatRow[]> {
+  const rows = await db
+    .select()
+    .from(chats)
+    .orderBy(desc(chats.updatedAt))
+    .limit(limit);
+
+  return rows;
 }
 
 export async function readChat(id: string): Promise<ChatRow> {

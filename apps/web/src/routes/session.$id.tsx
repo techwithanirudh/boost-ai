@@ -1,21 +1,26 @@
 // biome-ignore lint/style/useFilenamingConvention: TanStack file routes require `$param` segments.
 import { useChat } from "@ai-sdk/react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { DefaultChatTransport } from "ai";
-import {
-  Activity,
-  Bot,
-  Camera,
-  Clock3,
-  MessageSquare,
-  ShieldAlert,
-} from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Activity, Camera, ChevronLeft, ShieldAlert } from "lucide-react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Tool, type ToolRenderModel } from "@/components/tool";
+import {
+  Conversation,
+  ConversationContent,
+  ConversationEmptyState,
+  ConversationScrollButton,
+} from "@/components/ai-elements/conversation";
+import {
+  Message,
+  MessageContent,
+  MessageResponse,
+} from "@/components/ai-elements/message";
+import { ModeToggle } from "@/components/mode-toggle";
+import { Tool } from "@/components/tool";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { asRecord, asString, formatUptime } from "@/lib/utils";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
@@ -51,34 +56,13 @@ function statusDotClass(status: string): string {
   return "bg-muted-foreground";
 }
 
-function toolFromPart(
-  part: unknown,
-  fallbackId: string
-): ToolRenderModel | null {
-  const payload = asRecord(part);
-  const type = asString(payload?.type);
-  if (!type?.startsWith("tool-")) {
-    return null;
-  }
-
-  const toolName = type.replace("tool-", "");
-  return {
-    toolName,
-    toolCallId: asString(payload?.toolCallId) ?? fallbackId,
-    input: payload?.input,
-    output: payload?.output,
-    state: asString(payload?.state) ?? undefined,
-  };
-}
-
 function SessionPage() {
   const { id } = Route.useParams();
   const { goal: initialGoal } = Route.useSearch();
 
-  const [followUp, setFollowUp] = useState("");
   const [uptime, setUptime] = useState(0);
+  const [promptText, setPromptText] = useState("");
   const [sentInitialGoal, setSentInitialGoal] = useState(false);
-
   const startTimeRef = useRef<number | null>(null);
 
   const { messages, sendMessage, status, stop } = useChat({
@@ -100,11 +84,9 @@ function SessionPage() {
           },
         };
       },
-      prepareReconnectToStreamRequest: ({ id: chatId }) => {
-        return {
-          api: `/api/v1/chat/${chatId}/stream`,
-        };
-      },
+      prepareReconnectToStreamRequest: ({ id: chatId }) => ({
+        api: `/api/v1/chat/${chatId}/stream`,
+      }),
     }),
     onError: (error) => {
       toast.error(error.message);
@@ -113,12 +95,25 @@ function SessionPage() {
 
   const toolEvents = useMemo(
     () =>
-      messages.flatMap((message, messageIndex) =>
-        message.parts
-          .map((part, partIndex) =>
-            toolFromPart(part, `${message.id}-${messageIndex}-${partIndex}`)
-          )
-          .filter((part): part is ToolRenderModel => part !== null)
+      messages.flatMap((message) =>
+        message.parts.flatMap((part, partIndex) => {
+          const payload = asRecord(part);
+          const type = asString(payload?.type);
+          if (!type?.startsWith("tool-")) {
+            return [];
+          }
+
+          return [
+            {
+              input: payload?.input,
+              output: payload?.output,
+              state: asString(payload?.state) ?? undefined,
+              toolCallId:
+                asString(payload?.toolCallId) ?? `${message.id}-${partIndex}`,
+              toolName: type.replace("tool-", ""),
+            },
+          ];
+        })
       ),
     [messages]
   );
@@ -128,8 +123,7 @@ function SessionPage() {
       toolEvents
         .map((tool) => {
           const output = asRecord(tool.output);
-          const snapshot = asString(output?.snapshot);
-          return snapshot;
+          return asString(output?.snapshot);
         })
         .filter((snapshot): snapshot is string => Boolean(snapshot)),
     [toolEvents]
@@ -168,16 +162,6 @@ function SessionPage() {
 
   const isRunning = status === "streaming" || status === "submitted";
 
-  const sendFollowUp = () => {
-    const trimmed = followUp.trim();
-    if (!trimmed) {
-      return;
-    }
-
-    setFollowUp("");
-    sendMessage({ text: trimmed });
-  };
-
   const emergencyStop = async () => {
     stop();
 
@@ -193,102 +177,134 @@ function SessionPage() {
     toast.warning("Emergency stop sent");
   };
 
+  const submitPrompt = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trimmed = promptText.trim();
+    if (!trimmed) {
+      return;
+    }
+
+    sendMessage({ text: trimmed });
+    setPromptText("");
+  };
+
+  const title = initialGoal?.trim() || "Robot Chat";
+
   return (
-    <main className="grid h-full min-h-0 grid-rows-[1fr_auto] gap-3 p-3 md:grid-cols-[minmax(0,1fr)_320px] md:grid-rows-[1fr]">
-      <section className="flex min-h-0 flex-col gap-3">
+    <main className="grid h-full min-h-0 gap-3 p-3 md:grid-cols-[minmax(0,1fr)_320px]">
+      <section className="grid min-h-0 grid-rows-[auto_1fr_auto] gap-3">
         <Card className="flex items-center gap-3 border p-3">
+          <Link
+            className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs hover:bg-muted"
+            to="/"
+          >
+            <ChevronLeft className="size-3.5" />
+            Home
+          </Link>
+
+          <div className="min-w-0">
+            <p className="truncate font-medium text-sm">{title}</p>
+            <p className="text-muted-foreground text-xs">Chat Pane</p>
+          </div>
+
           <span
-            className={`inline-block size-2.5 rounded-full ${statusDotClass(status)}`}
+            className={`ml-auto inline-block size-2.5 rounded-full ${statusDotClass(status)}`}
           />
-          <p className="font-semibold text-sm">Session {id.slice(0, 8)}</p>
-          <span className="text-muted-foreground text-xs">
-            {stateLabel(status)}
-          </span>
-          <span className="ml-auto text-muted-foreground text-xs">
-            {formatUptime(uptime)}
-          </span>
-          <Button onClick={emergencyStop} size="sm" variant="destructive">
-            STOP
+
+          <Button
+            onClick={emergencyStop}
+            size="sm"
+            type="button"
+            variant="destructive"
+          >
+            Stop Session
           </Button>
+
+          <ModeToggle />
         </Card>
 
-        <Card className="overflow-hidden border p-0">
-          {/* biome-ignore lint/correctness/useImageSize: dynamic stream frame size */}
-          <img
-            alt="Latest session snapshot"
-            className="h-64 w-full object-contain md:h-80"
-            src={latestSnapshot}
-          />
-        </Card>
+        <Card className="min-h-0 overflow-hidden border p-0">
+          <Conversation>
+            <ConversationContent className="px-3 py-3">
+              {messages.length > 0 ? (
+                messages.map((message) => (
+                  <Message from={message.role} key={message.id}>
+                    <MessageContent>
+                      {message.parts.map((part, partIndex) => {
+                        const payload = asRecord(part);
+                        const type = asString(payload?.type);
 
-        <Card className="min-h-0 flex-1 overflow-y-auto border p-3">
-          <div className="mb-3 flex items-center gap-2">
-            <MessageSquare className="size-4 text-muted-foreground" />
-            <p className="font-medium text-sm">Chat + Tool History</p>
-          </div>
+                        if (type === "text") {
+                          return (
+                            <MessageResponse
+                              key={`${message.id}-text-${partIndex}`}
+                            >
+                              {asString(payload?.text) ?? ""}
+                            </MessageResponse>
+                          );
+                        }
 
-          <div className="space-y-3">
-            {messages.length > 0 ? (
-              messages.map((message) => (
-                <article
-                  className="rounded-xl border bg-card p-3"
-                  key={message.id}
-                >
-                  <div className="mb-2 flex items-center gap-2">
-                    <span className="inline-flex size-6 items-center justify-center rounded-md border bg-muted text-muted-foreground">
-                      {message.role === "assistant" ? (
-                        <Bot className="size-3.5" />
-                      ) : (
-                        <MessageSquare className="size-3.5" />
-                      )}
-                    </span>
-                    <p className="font-medium text-sm capitalize">
-                      {message.role}
-                    </p>
-                  </div>
+                        if (!type?.startsWith("tool-")) {
+                          return null;
+                        }
 
-                  <div className="space-y-2">
-                    {message.parts.map((part, partIndex) => {
-                      const data = asRecord(part);
-                      const type = asString(data?.type);
-
-                      if (type === "text") {
                         return (
-                          <p
-                            className="whitespace-pre-wrap rounded-lg border bg-muted/30 p-2 text-sm"
-                            key={`${message.id}-text-${partIndex}`}
-                          >
-                            {asString(data?.text) ?? ""}
-                          </p>
+                          <Tool
+                            key={`${message.id}-tool-${partIndex}`}
+                            tool={{
+                              input: payload?.input,
+                              output: payload?.output,
+                              state: asString(payload?.state) ?? undefined,
+                              toolCallId:
+                                asString(payload?.toolCallId) ??
+                                `${message.id}-${partIndex}`,
+                              toolName: type.replace("tool-", ""),
+                            }}
+                          />
                         );
-                      }
+                      })}
+                    </MessageContent>
+                  </Message>
+                ))
+              ) : (
+                <ConversationEmptyState
+                  description="Send your first goal to start tool-driven robot chat."
+                  title="No messages yet"
+                />
+              )}
+            </ConversationContent>
+            <ConversationScrollButton />
+          </Conversation>
+        </Card>
 
-                      const tool = toolFromPart(
-                        part,
-                        `${message.id}-tool-${partIndex}`
-                      );
-
-                      if (!tool) {
-                        return null;
-                      }
-
-                      return <Tool key={tool.toolCallId} tool={tool} />;
-                    })}
-                  </div>
-                </article>
-              ))
-            ) : (
-              <article className="rounded-xl border bg-muted/20 p-3 text-muted-foreground text-sm">
-                No messages yet.
-              </article>
-            )}
-          </div>
+        <Card className="border p-2">
+          <form className="space-y-2" onSubmit={submitPrompt}>
+            <Textarea
+              onChange={(event) => setPromptText(event.target.value)}
+              placeholder="Add new goal / follow-up"
+              rows={3}
+              value={promptText}
+            />
+            <div className="flex items-center justify-between">
+              <Button
+                disabled={!isRunning}
+                onClick={emergencyStop}
+                type="button"
+                variant="destructive"
+              >
+                Stop
+              </Button>
+              <Button disabled={!promptText.trim()} type="submit">
+                Send
+              </Button>
+            </div>
+          </form>
         </Card>
       </section>
 
       <aside className="flex min-h-0 flex-col gap-3">
         <Card className="border p-3">
-          <p className="mb-3 font-medium text-sm">System</p>
+          <p className="mb-3 font-medium text-sm">Diagnostics</p>
           <dl className="space-y-2 text-sm">
             <div className="flex items-center justify-between">
               <dt className="flex items-center gap-2 text-muted-foreground">
@@ -300,7 +316,7 @@ function SessionPage() {
             <div className="flex items-center justify-between">
               <dt className="flex items-center gap-2 text-muted-foreground">
                 <ShieldAlert className="size-4" />
-                Boost status
+                Status
               </dt>
               <dd className="capitalize">{stateLabel(status)}</dd>
             </div>
@@ -312,6 +328,15 @@ function SessionPage() {
               <dd>{toolSnapshots.length}</dd>
             </div>
           </dl>
+        </Card>
+
+        <Card className="overflow-hidden border p-0">
+          {/* biome-ignore lint/correctness/useImageSize: dynamic stream frame size */}
+          <img
+            alt="Latest session snapshot"
+            className="h-52 w-full object-contain"
+            src={latestSnapshot}
+          />
         </Card>
 
         <Card className="min-h-0 flex-1 overflow-y-auto border p-3">
@@ -333,33 +358,6 @@ function SessionPage() {
             ) : (
               <p className="text-muted-foreground text-sm">No frames yet.</p>
             )}
-          </div>
-        </Card>
-
-        <Card className="border p-3">
-          <label
-            className="mb-2 flex items-center gap-2 font-medium text-sm"
-            htmlFor="goal-input"
-          >
-            <Clock3 className="size-4 text-muted-foreground" />
-            New Goal
-          </label>
-          <div className="flex gap-2">
-            <Input
-              className="bg-background"
-              disabled={isRunning}
-              id="goal-input"
-              onChange={(event) => setFollowUp(event.target.value)}
-              onKeyDown={(event) => event.key === "Enter" && sendFollowUp()}
-              placeholder="Enter next task"
-              value={followUp}
-            />
-            <Button
-              disabled={isRunning || !followUp.trim()}
-              onClick={sendFollowUp}
-            >
-              Run
-            </Button>
           </div>
         </Card>
       </aside>
