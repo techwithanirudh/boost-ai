@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Sparkles } from "lucide-react";
+import { Bot } from "lucide-react";
 import { ModeToggle } from "@/components/mode-toggle";
 
 export function AppHeader() {
@@ -10,7 +10,7 @@ export function AppHeader() {
           className="flex min-w-0 items-center gap-2 rounded-md px-1 py-0.5 hover:opacity-80"
           to="/"
         >
-          <Sparkles className="size-4 shrink-0 text-primary" />
+          <Bot className="size-5 shrink-0 text-primary" />
           <p className="truncate font-semibold text-sm">Boost Control</p>
         </Link>
 
