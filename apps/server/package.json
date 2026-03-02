@@ -18,8 +18,10 @@
     "ai-retry": "^1.2.0",
     "drizzle-orm": "^0.45.1",
     "hono": "^4.8.2",
+    "ioredis": "^5.10.0",
     "ky": "^1.7.5",
     "pino": "^10.3.1",
+    "resumable-stream": "^2.2.10",
     "zod": "catalog:"
   },
   "devDependencies": {

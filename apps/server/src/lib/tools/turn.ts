@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import { createLogger } from "@/lib/logger";
-import { captureMotionSnapshots } from "@/services/motion-snapshots";
+import { fetchFrame } from "@/services/frame";
 import { hub } from "../hub";
 
 const log = createLogger("tool:turn");
@@ -39,23 +39,36 @@ export const turnTool = tool({
     const durationMs = Math.round(
       (Math.abs(value) / DEG_PER_SEC_AT_FULL / effectiveSpeed) * 1000
     );
+
     log.info(
       { value, speed, text },
-      `turn ${Math.abs(value)}° ${dir} (~${durationMs}ms)`
+      `turn ${Math.abs(value)} deg ${dir} (~${durationMs}ms)`
     );
-    const [result, movementSnapshots] = await Promise.all([
-      hub.executeAction({ action: "turn_deg", value, speed, text }),
-      captureMotionSnapshots(durationMs, 6),
-    ]);
+
+    const result = await hub.executeAction({
+      action: "turn_deg",
+      value,
+      speed,
+      text,
+    });
+
     if (!result.ok) {
       log.error({ error: result.error }, "turn failed");
     }
+
+    let snapshot: string | null = null;
+    try {
+      const frame = await fetchFrame();
+      snapshot = frame.dataUrl;
+    } catch {
+      snapshot = null;
+    }
+
     return {
-      action: `turn ${value}°`,
       data: result.data,
       error: result.error,
-      movementSnapshots,
       ok: result.ok,
+      snapshot,
     };
   },
 });

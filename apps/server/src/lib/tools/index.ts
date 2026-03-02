@@ -10,5 +10,3 @@ export const toolSet = {
   stop: stopTool,
   turn: turnTool,
 };
-
-export type RobotToolSet = typeof toolSet;

@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import { createLogger } from "@/lib/logger";
+import { fetchFrame } from "@/services/frame";
 
 const log = createLogger("tool:complete");
 
@@ -15,6 +16,15 @@ export const completeTool = tool({
   }),
   execute: async ({ summary }) => {
     log.info({ summary }, "session complete");
-    return { ok: true, summary };
+
+    let snapshot: string | null = null;
+    try {
+      const frame = await fetchFrame();
+      snapshot = frame.dataUrl;
+    } catch {
+      snapshot = null;
+    }
+
+    return { ok: true, summary, snapshot };
   },
 });

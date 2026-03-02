@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import { createLogger } from "@/lib/logger";
-import { captureMotionSnapshots } from "@/services/motion-snapshots";
+import { fetchFrame } from "@/services/frame";
 import { hub } from "../hub";
 
 const CM_PER_SEC_AT_FULL = 15.0;
@@ -12,6 +12,7 @@ function createMotionTool(
   description: string
 ) {
   const log = createLogger(`tool:${direction}`);
+
   return tool({
     description,
     inputSchema: z.object({
@@ -19,13 +20,13 @@ function createMotionTool(
         .number()
         .min(0.05)
         .max(10.0)
-        .describe("Distance in metres (0.05–10.0)."),
+        .describe("Distance in metres (0.05-10.0)."),
       speed: z
         .number()
         .min(0)
         .max(1)
         .default(0.4)
-        .describe("Speed 0–1. Default 0.4."),
+        .describe("Speed 0-1. Default 0.4."),
       text: z
         .string()
         .min(1)
@@ -38,20 +39,36 @@ function createMotionTool(
       const durationMs = Math.round(
         (cm / CM_PER_SEC_AT_FULL / effectiveSpeed) * 1000
       );
-      log.info({ value, speed, text }, `${direction} ${value}m (~${durationMs}ms)`);
-      const [result, movementSnapshots] = await Promise.all([
-        hub.executeAction({ action: hubAction, value: cm, speed, text }),
-        captureMotionSnapshots(durationMs, 6),
-      ]);
+
+      log.info(
+        { value, speed, text },
+        `${direction} ${value}m (~${durationMs}ms)`
+      );
+
+      const result = await hub.executeAction({
+        action: hubAction,
+        value: cm,
+        speed,
+        text,
+      });
+
       if (!result.ok) {
         log.error({ error: result.error }, `${direction} failed`);
       }
+
+      let snapshot: string | null = null;
+      try {
+        const frame = await fetchFrame();
+        snapshot = frame.dataUrl;
+      } catch {
+        snapshot = null;
+      }
+
       return {
-        action: `${direction} ${value}m`,
         data: result.data,
         error: result.error,
-        movementSnapshots,
         ok: result.ok,
+        snapshot,
       };
     },
   });

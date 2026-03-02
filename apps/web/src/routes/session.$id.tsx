@@ -1,10 +1,22 @@
 // biome-ignore lint/style/useFilenamingConvention: TanStack file routes require `$param` segments.
+import { useChat } from "@ai-sdk/react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { DefaultChatTransport } from "ai";
+import {
+  Activity,
+  Bot,
+  Camera,
+  Clock3,
+  MessageSquare,
+  ShieldAlert,
+} from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { Tool, type ToolRenderModel } from "@/components/tool";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { api, type SessionStatus, type StepEvent } from "@/lib/api";
+import { asRecord, asString, formatUptime } from "@/lib/utils";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 
@@ -15,339 +27,342 @@ export const Route = createFileRoute("/session/$id")({
   }),
 });
 
-function formatUptime(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+function stateLabel(status: string): string {
+  if (status === "streaming" || status === "submitted") {
+    return "running";
+  }
+
+  if (status === "error") {
+    return "stopped";
+  }
+
+  return "ready";
 }
 
-function statusColor(status: SessionStatus): string {
-  if (status === "running") {
-    return "text-green-400";
+function statusDotClass(status: string): string {
+  if (status === "streaming" || status === "submitted") {
+    return "bg-emerald-500";
   }
-  if (status === "stopped") {
-    return "text-red-400";
+
+  if (status === "error") {
+    return "bg-destructive";
   }
-  return "text-zinc-400";
+
+  return "bg-muted-foreground";
 }
 
-function statusDdColor(status: SessionStatus): string {
-  if (status === "running") {
-    return "text-green-400";
+function toolFromPart(
+  part: unknown,
+  fallbackId: string
+): ToolRenderModel | null {
+  const payload = asRecord(part);
+  const type = asString(payload?.type);
+  if (!type?.startsWith("tool-")) {
+    return null;
   }
-  if (status === "stopped") {
-    return "text-red-400";
-  }
-  return "text-zinc-300";
-}
 
-function dotColor(isStreaming: boolean, status: SessionStatus): string {
-  if (isStreaming) {
-    return "animate-pulse bg-green-400";
-  }
-  if (status === "stopped") {
-    return "bg-red-400";
-  }
-  return "bg-zinc-500";
-}
-
-const TILE_SLOTS = [0, 1, 2, 3, 4, 5] as const;
-
-function FilmStrip({ snapshots }: { snapshots: string[] }) {
-  return (
-    <div className="grid grid-cols-3 gap-1">
-      {TILE_SLOTS.map((slot) => {
-        const src = snapshots[slot] ?? null;
-        return (
-          <div
-            className="relative aspect-[3/4] overflow-hidden rounded bg-zinc-900"
-            key={slot}
-          >
-            {src ? (
-              // biome-ignore lint/correctness/useImageSize: dynamic base64 frame, size unknown at render
-              <img
-                alt={`Frame ${slot + 1}`}
-                className="h-full w-full object-cover"
-                src={src}
-              />
-            ) : (
-              <div className="flex h-full items-center justify-center text-xs text-zinc-700">
-                —
-              </div>
-            )}
-            <span className="absolute bottom-0.5 left-0.5 rounded bg-black/60 px-1 font-mono text-[10px] text-zinc-300">
-              {slot + 1}
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
+  const toolName = type.replace("tool-", "");
+  return {
+    toolName,
+    toolCallId: asString(payload?.toolCallId) ?? fallbackId,
+    input: payload?.input,
+    output: payload?.output,
+    state: asString(payload?.state) ?? undefined,
+  };
 }
 
 function SessionPage() {
   const { id } = Route.useParams();
   const { goal: initialGoal } = Route.useSearch();
 
-  const [status, setStatus] = useState<SessionStatus>("running");
-  const [steps, setSteps] = useState<StepEvent[]>([]);
-  const [isStreaming, setIsStreaming] = useState(false);
   const [followUp, setFollowUp] = useState("");
   const [uptime, setUptime] = useState(0);
+  const [sentInitialGoal, setSentInitialGoal] = useState(false);
 
-  const abortRef = useRef<AbortController | null>(null);
-  const isStreamingRef = useRef(false);
-  const bootstrappedRef = useRef(false);
   const startTimeRef = useRef<number | null>(null);
 
-  // Uptime counter
+  const { messages, sendMessage, status, stop } = useChat({
+    id,
+    resume: true,
+    transport: new DefaultChatTransport({
+      api: "/api/v1/chat",
+      prepareSendMessagesRequest: ({
+        id: chatId,
+        messages: currentMessages,
+      }) => {
+        const lastMessage = currentMessages.at(-1);
+
+        return {
+          body: {
+            id: chatId,
+            goal: initialGoal,
+            message: lastMessage,
+          },
+        };
+      },
+      prepareReconnectToStreamRequest: ({ id: chatId }) => {
+        return {
+          api: `/api/v1/chat/${chatId}/stream`,
+        };
+      },
+    }),
+    onError: (error) => {
+      toast.error(error.message);
+    },
+  });
+
+  const toolEvents = useMemo(
+    () =>
+      messages.flatMap((message, messageIndex) =>
+        message.parts
+          .map((part, partIndex) =>
+            toolFromPart(part, `${message.id}-${messageIndex}-${partIndex}`)
+          )
+          .filter((part): part is ToolRenderModel => part !== null)
+      ),
+    [messages]
+  );
+
+  const toolSnapshots = useMemo(
+    () =>
+      toolEvents
+        .map((tool) => {
+          const output = asRecord(tool.output);
+          const snapshot = asString(output?.snapshot);
+          return snapshot;
+        })
+        .filter((snapshot): snapshot is string => Boolean(snapshot)),
+    [toolEvents]
+  );
+
+  const latestSnapshot =
+    toolSnapshots.at(-1) ?? `${API_URL}/v1/snapshot?t=${Date.now()}`;
+
   useEffect(() => {
-    if (!isStreaming) {
+    if (!(status === "streaming" || status === "submitted")) {
       return;
     }
+
     startTimeRef.current = Date.now();
     setUptime(0);
+
     const timerId = setInterval(() => {
       if (startTimeRef.current !== null) {
         setUptime(Math.floor((Date.now() - startTimeRef.current) / 1000));
       }
     }, 1000);
-    return () => clearInterval(timerId);
-  }, [isStreaming]);
 
-  const latestStep = steps.at(-1) ?? null;
-  const movementLog = steps
-    .map((s) => s.action)
-    .filter(Boolean)
-    .join(" → ");
-
-  const runGoal = useCallback(
-    async (goal: string) => {
-      const trimmed = goal.trim();
-      if (!trimmed || isStreamingRef.current) {
-        return;
-      }
-
-      abortRef.current?.abort();
-      const controller = new AbortController();
-      abortRef.current = controller;
-      isStreamingRef.current = true;
-      setIsStreaming(true);
-      setStatus("running");
-      setSteps([]);
-
-      try {
-        await api.streamSession(trimmed, {
-          id,
-          signal: controller.signal,
-          onEvent: (event) => {
-            if (event.type === "step") {
-              const { type: _type, ...stepData } = event;
-              setSteps((prev) => [...prev, stepData as StepEvent]);
-            }
-            if (event.type === "session_result") {
-              setStatus(event.status);
-            }
-            if (event.type === "session_error") {
-              setStatus("stopped");
-              toast.error(event.error);
-            }
-            if (event.type === "session_complete") {
-              setStatus(event.status);
-            }
-          },
-        });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        toast.error(message);
-      } finally {
-        isStreamingRef.current = false;
-        setIsStreaming(false);
-      }
-    },
-    [id]
-  );
+    return () => {
+      clearInterval(timerId);
+    };
+  }, [status]);
 
   useEffect(() => {
-    if (!initialGoal || bootstrappedRef.current) {
+    if (!initialGoal || sentInitialGoal || messages.length > 0) {
       return;
     }
-    bootstrappedRef.current = true;
-    runGoal(initialGoal).catch((error: unknown) => {
-      toast.error(error instanceof Error ? error.message : String(error));
-    });
-    return () => {
-      abortRef.current?.abort();
-    };
-  }, [initialGoal, runGoal]);
 
-  const emergencyStop = async () => {
-    const res = await api.stopSession(id).catch(() => null);
-    if (!res?.ok) {
-      toast.error("Emergency stop failed");
-      return;
-    }
-    setStatus("stopped");
-    abortRef.current?.abort();
-    toast.warning("Emergency stop sent");
-  };
+    setSentInitialGoal(true);
+    sendMessage({ text: initialGoal });
+  }, [initialGoal, messages.length, sendMessage, sentInitialGoal]);
+
+  const isRunning = status === "streaming" || status === "submitted";
 
   const sendFollowUp = () => {
     const trimmed = followUp.trim();
     if (!trimmed) {
       return;
     }
+
     setFollowUp("");
-    runGoal(trimmed).catch((error: unknown) => {
-      toast.error(error instanceof Error ? error.message : String(error));
-    });
+    sendMessage({ text: trimmed });
   };
 
-  const snapshotSrc =
-    latestStep?.snapshot ?? `${API_URL}/v1/snapshot?t=${Date.now()}`;
+  const emergencyStop = async () => {
+    stop();
 
-  const reasoningText =
-    latestStep?.text ??
-    (isStreaming ? "Waiting for first step…" : "No session running.");
+    const res = await fetch(`/api/v1/chat/${id}/stop`, {
+      method: "POST",
+    }).catch(() => null);
+
+    if (!res?.ok) {
+      toast.error("Emergency stop failed");
+      return;
+    }
+
+    toast.warning("Emergency stop sent");
+  };
 
   return (
-    <main className="flex h-full min-h-0 flex-col gap-3 p-3 font-mono">
-      {/* Top bar */}
-      <div className="flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-950 px-4 py-2 text-sm">
-        <span className="font-bold text-white tracking-wider">BOOST</span>
-        <span className={`flex items-center gap-1.5 ${statusColor(status)}`}>
+    <main className="grid h-full min-h-0 grid-rows-[1fr_auto] gap-3 p-3 md:grid-cols-[minmax(0,1fr)_320px] md:grid-rows-[1fr]">
+      <section className="flex min-h-0 flex-col gap-3">
+        <Card className="flex items-center gap-3 border p-3">
           <span
-            className={`inline-block h-2 w-2 rounded-full ${dotColor(isStreaming, status)}`}
+            className={`inline-block size-2.5 rounded-full ${statusDotClass(status)}`}
           />
-          {status.toUpperCase()}
-        </span>
-        <span className="text-xs text-zinc-500">{id.slice(0, 8)}</span>
-        <span className="ml-auto text-xs text-zinc-500">
-          step {steps.length} · {formatUptime(uptime)}
-        </span>
-        <Button
-          className="h-7 bg-red-900 text-xs hover:bg-red-700"
-          onClick={emergencyStop}
-          size="sm"
-          variant="destructive"
-        >
-          STOP
-        </Button>
-      </div>
+          <p className="font-semibold text-sm">Session {id.slice(0, 8)}</p>
+          <span className="text-muted-foreground text-xs">
+            {stateLabel(status)}
+          </span>
+          <span className="ml-auto text-muted-foreground text-xs">
+            {formatUptime(uptime)}
+          </span>
+          <Button onClick={emergencyStop} size="sm" variant="destructive">
+            STOP
+          </Button>
+        </Card>
 
-      {/* Main content */}
-      <div className="flex min-h-0 flex-1 gap-3">
-        {/* Left: snapshot */}
-        <div className="flex min-w-0 flex-1 flex-col gap-3">
-          <div className="relative overflow-hidden rounded-lg border border-zinc-800 bg-black">
-            {/* biome-ignore lint/correctness/useImageSize: dynamic frame, size varies */}
-            <img
-              alt="Latest camera frame"
-              className="w-full object-contain"
-              src={snapshotSrc}
-              style={{ maxHeight: "55vh" }}
-            />
-            {latestStep?.action && (
-              <div className="absolute bottom-2 left-2 rounded bg-black/70 px-2 py-1 font-bold text-green-400 text-sm">
-                {latestStep.action}
-              </div>
-            )}
-            {isStreaming && (
-              <div className="absolute top-2 right-2 rounded bg-black/70 px-2 py-0.5 text-[10px] text-green-400">
-                LIVE
-              </div>
-            )}
+        <Card className="overflow-hidden border p-0">
+          {/* biome-ignore lint/correctness/useImageSize: dynamic stream frame size */}
+          <img
+            alt="Latest session snapshot"
+            className="h-64 w-full object-contain md:h-80"
+            src={latestSnapshot}
+          />
+        </Card>
+
+        <Card className="min-h-0 flex-1 overflow-y-auto border p-3">
+          <div className="mb-3 flex items-center gap-2">
+            <MessageSquare className="size-4 text-muted-foreground" />
+            <p className="font-medium text-sm">Chat + Tool History</p>
           </div>
 
-          {/* AI reasoning */}
-          <div className="rounded-lg border border-zinc-800 bg-zinc-950 p-3">
-            <div className="mb-1.5 text-[10px] text-zinc-500 uppercase tracking-widest">
-              AI Reasoning
-            </div>
-            <p className="whitespace-pre-wrap text-sm text-zinc-300">
-              {reasoningText}
-            </p>
-          </div>
-
-          {/* Movement log */}
-          {movementLog && (
-            <div className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2">
-              <div className="mb-1 text-[10px] text-zinc-500 uppercase tracking-widest">
-                Movement Log
-              </div>
-              <div className="flex flex-wrap gap-1">
-                {steps
-                  .filter((s) => s.action)
-                  .map((s) => (
-                    <span
-                      className="rounded border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-[11px] text-zinc-300"
-                      key={s.stepIndex}
-                    >
-                      {s.action}
+          <div className="space-y-3">
+            {messages.length > 0 ? (
+              messages.map((message) => (
+                <article
+                  className="rounded-xl border bg-card p-3"
+                  key={message.id}
+                >
+                  <div className="mb-2 flex items-center gap-2">
+                    <span className="inline-flex size-6 items-center justify-center rounded-md border bg-muted text-muted-foreground">
+                      {message.role === "assistant" ? (
+                        <Bot className="size-3.5" />
+                      ) : (
+                        <MessageSquare className="size-3.5" />
+                      )}
                     </span>
-                  ))}
-              </div>
-            </div>
-          )}
-        </div>
+                    <p className="font-medium text-sm capitalize">
+                      {message.role}
+                    </p>
+                  </div>
 
-        {/* Right: sys status + film strip */}
-        <div className="flex w-64 shrink-0 flex-col gap-3">
-          {/* Sys status */}
-          <div className="rounded-lg border border-zinc-800 bg-zinc-950 p-3">
-            <div className="mb-2 text-[10px] text-zinc-500 uppercase tracking-widest">
-              Sys Status
-            </div>
-            <dl className="space-y-1 text-xs">
-              <div className="flex justify-between">
-                <dt className="text-zinc-500">Status</dt>
-                <dd className={statusDdColor(status)}>{status}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-zinc-500">Steps</dt>
-                <dd className="text-zinc-300">{steps.length}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-zinc-500">Uptime</dt>
-                <dd className="text-zinc-300">{formatUptime(uptime)}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-zinc-500">Last action</dt>
-                <dd className="max-w-[120px] truncate text-right text-zinc-300">
-                  {latestStep?.action ?? "—"}
-                </dd>
-              </div>
-            </dl>
+                  <div className="space-y-2">
+                    {message.parts.map((part, partIndex) => {
+                      const data = asRecord(part);
+                      const type = asString(data?.type);
+
+                      if (type === "text") {
+                        return (
+                          <p
+                            className="whitespace-pre-wrap rounded-lg border bg-muted/30 p-2 text-sm"
+                            key={`${message.id}-text-${partIndex}`}
+                          >
+                            {asString(data?.text) ?? ""}
+                          </p>
+                        );
+                      }
+
+                      const tool = toolFromPart(
+                        part,
+                        `${message.id}-tool-${partIndex}`
+                      );
+
+                      if (!tool) {
+                        return null;
+                      }
+
+                      return <Tool key={tool.toolCallId} tool={tool} />;
+                    })}
+                  </div>
+                </article>
+              ))
+            ) : (
+              <article className="rounded-xl border bg-muted/20 p-3 text-muted-foreground text-sm">
+                No messages yet.
+              </article>
+            )}
           </div>
+        </Card>
+      </section>
 
-          {/* Motion film strip */}
-          <div className="rounded-lg border border-zinc-800 bg-zinc-950 p-3">
-            <div className="mb-2 text-[10px] text-zinc-500 uppercase tracking-widest">
-              Motion Snapshots
+      <aside className="flex min-h-0 flex-col gap-3">
+        <Card className="border p-3">
+          <p className="mb-3 font-medium text-sm">System</p>
+          <dl className="space-y-2 text-sm">
+            <div className="flex items-center justify-between">
+              <dt className="flex items-center gap-2 text-muted-foreground">
+                <Activity className="size-4" />
+                Uptime
+              </dt>
+              <dd>{formatUptime(uptime)}</dd>
             </div>
-            <FilmStrip snapshots={latestStep?.movementSnapshots ?? []} />
-          </div>
-        </div>
-      </div>
+            <div className="flex items-center justify-between">
+              <dt className="flex items-center gap-2 text-muted-foreground">
+                <ShieldAlert className="size-4" />
+                Boost status
+              </dt>
+              <dd className="capitalize">{stateLabel(status)}</dd>
+            </div>
+            <div className="flex items-center justify-between">
+              <dt className="flex items-center gap-2 text-muted-foreground">
+                <Camera className="size-4" />
+                Frames
+              </dt>
+              <dd>{toolSnapshots.length}</dd>
+            </div>
+          </dl>
+        </Card>
 
-      {/* Goal input */}
-      <div className="flex gap-2 rounded-lg border border-zinc-800 bg-zinc-950 p-3">
-        <Input
-          className="border-zinc-700 bg-zinc-900 font-mono text-sm text-white placeholder:text-zinc-600"
-          disabled={isStreaming}
-          onChange={(e) => setFollowUp(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && sendFollowUp()}
-          placeholder="Enter goal or follow-up…"
-          value={followUp}
-        />
-        <Button
-          disabled={isStreaming || !followUp.trim()}
-          onClick={sendFollowUp}
-          size="sm"
-        >
-          {isStreaming ? "Running…" : "Run"}
-        </Button>
-      </div>
+        <Card className="min-h-0 flex-1 overflow-y-auto border p-3">
+          <p className="mb-3 font-medium text-sm">Recent Frames</p>
+          <div className="space-y-2">
+            {toolSnapshots.length > 0 ? (
+              toolSnapshots
+                .slice(-8)
+                .reverse()
+                .map((frame) => (
+                  // biome-ignore lint/correctness/useImageSize: dynamic stream frame size
+                  <img
+                    alt="Recent frame"
+                    className="w-full rounded-lg border object-contain"
+                    key={frame}
+                    src={frame}
+                  />
+                ))
+            ) : (
+              <p className="text-muted-foreground text-sm">No frames yet.</p>
+            )}
+          </div>
+        </Card>
+
+        <Card className="border p-3">
+          <label
+            className="mb-2 flex items-center gap-2 font-medium text-sm"
+            htmlFor="goal-input"
+          >
+            <Clock3 className="size-4 text-muted-foreground" />
+            New Goal
+          </label>
+          <div className="flex gap-2">
+            <Input
+              className="bg-background"
+              disabled={isRunning}
+              id="goal-input"
+              onChange={(event) => setFollowUp(event.target.value)}
+              onKeyDown={(event) => event.key === "Enter" && sendFollowUp()}
+              placeholder="Enter next task"
+              value={followUp}
+            />
+            <Button
+              disabled={isRunning || !followUp.trim()}
+              onClick={sendFollowUp}
+            >
+              Run
+            </Button>
+          </div>
+        </Card>
+      </aside>
     </main>
   );
 }

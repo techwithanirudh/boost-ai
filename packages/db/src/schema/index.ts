@@ -1,20 +1,18 @@
 import { jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
 /**
- * One session = one autonomous mission run.
- *
- * Stores the full AI SDK ModelMessage[] as JSONB so the agent can resume
- * without losing tool-call history or context.
+ * Minimal AI SDK chat persistence shape.
  */
-export const aiSessions = pgTable("ai_sessions", {
+export const chats = pgTable("chats", {
   id: text("id").primaryKey(),
-  goal: text("goal").notNull(),
+  goal: text("goal").notNull().default(""),
   status: text("status")
     .$type<"running" | "stopped" | "completed">()
     .notNull()
     .default("running"),
-  /** Full ModelMessage[] history. Trimmed to config.history.limit on every save. */
   messages: jsonb("messages").notNull().default([]),
+  activeStreamId: text("active_stream_id"),
+  canceledAt: timestamp("canceled_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
