@@ -12,3 +12,6 @@ Add depth map as a second image part in the AI user message.
 - If the health status for boost is unhealthy block the whole app-ish becausew whole app rlies on boost
 - If boost is disconnected again, always reconnect, indicdate in api tooand frontend
 - The title code is cluttered
+- Inject movement map (6 images)
+- Take tool snapshot at final, not half way
+- delete getPosition tool

@@ -65,7 +65,7 @@ export function Sessions({
   }
 
   return (
-    <div className="space-y-1.5">
+    <div className="flex max-h-[74svh] flex-col space-y-1.5 overflow-auto pb-4">
       {history.map((chat) => (
         <Link
           className="flex items-center justify-between rounded-lg border p-3 text-sm transition-colors hover:bg-muted/50"

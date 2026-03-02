@@ -16,7 +16,6 @@
     "@boost/validators": "workspace:*",
     "ai": "^6.0.105",
     "ai-retry": "^1.2.0",
-    "ai-sdk-openai-websocket-fetch": "^1.0.0",
     "drizzle-orm": "^0.45.1",
     "hono": "^4.8.2",
     "ioredis": "^5.10.0",

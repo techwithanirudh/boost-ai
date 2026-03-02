@@ -193,7 +193,7 @@ function SessionPage() {
       </section>
 
       <aside className="flex min-h-0 flex-col gap-3">
-        <Card className="overflow-hidden border p-0">
+        <Card className="gap-0 overflow-hidden border p-0">
           <div className="border-b px-3 py-2">
             <p className="font-medium text-sm">Camera</p>
           </div>

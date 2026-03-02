@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { generateId } from "ai";
-import { Sparkles } from "lucide-react";
 import { useState } from "react";
 import {
   NewTaskForm,
@@ -44,19 +43,7 @@ function HomePage() {
 
   return (
     <main className="mx-auto flex h-full w-full max-w-5xl flex-col gap-6 px-4 py-6">
-      <div className="flex items-center gap-2">
-        <div className="flex size-10 items-center justify-center rounded-full bg-primary/10">
-          <Sparkles className="size-4 shrink-0 text-primary" />
-        </div>
-        <div>
-          <h1 className="font-semibold text-lg leading-tight">Boost Control</h1>
-          <p className="text-muted-foreground text-xs">
-            LEGO Boost autonomous robot
-          </p>
-        </div>
-      </div>
-
-      <Card className="p-6">
+      <Card className="shrink-0 p-6">
         <h2 className="mb-1 font-medium text-base">New task</h2>
         <p className="mb-4 text-muted-foreground text-sm">
           Describe what you want the robot to do and it will navigate

@@ -5,7 +5,9 @@ import {
   createUIMessageStream,
   createUIMessageStreamResponse,
   generateId,
+  generateText,
   hasToolCall,
+  Output,
   pruneMessages,
   stepCountIs,
   streamText,
@@ -93,6 +95,44 @@ export async function postChat(request: Request): Promise<Response> {
         messages: await convertToModelMessages(messages, { tools: toolSet }),
         tools: toolSet,
         toolChoice: "required",
+        experimental_repairToolCall: async ({
+          toolCall,
+          tools,
+          inputSchema,
+          system,
+          messages,
+        }) => {
+          const tool = tools[toolCall.toolName as keyof typeof tools];
+          if (!tool) {
+            return null;
+          }
+
+          const schema = await inputSchema({ toolName: toolCall.toolName });
+
+          const { output: repairedArgs } = await generateText({
+            model: provider.languageModel("chat-model"),
+            output: Output.object({
+              schema,
+            }),
+            system,
+            messages: [
+              ...messages,
+              {
+                role: "assistant",
+                content: [
+                  {
+                    type: "tool-call",
+                    toolCallId: toolCall.toolCallId,
+                    toolName: toolCall.toolName,
+                    input: toolCall.input,
+                  },
+                ],
+              },
+            ],
+          });
+
+          return { ...toolCall, input: JSON.stringify(repairedArgs) };
+        },
         stopWhen: [
           hasToolCall("complete"),
           hasToolCall("stop"),
