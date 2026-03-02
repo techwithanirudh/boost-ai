@@ -3,10 +3,20 @@
 Autonomous LEGO Boost robot controlled by a multimodal AI agent running on a Raspberry Pi.
 
 ```
-iPhone (Larix RTMP) → MediaMTX → Server (AI loop) → Hub (FastAPI + BLE) → LEGO Boost Move Hub
+iPhone (Larix RTMP) → MediaMTX → /tmp/snapshot.jpg → Server (AI loop) → Hub (FastAPI + BLE) → LEGO Boost Move Hub
 ```
 
-The AI receives the live camera frame and a goal (e.g. *"go to the kitchen"*). It calls motion tools — `forward_cm`, `backward_cm`, `turn_deg`, `stop` — in a loop until it calls `complete`. Every session's messages are persisted in Postgres so the agent retains full context across follow-up runs.
+The AI receives a live camera snapshot and a goal (e.g. *"go to the kitchen"*). It calls motion tools — `forward`, `backward`, `turn`, `stop` — in a loop until it calls `complete`. Every session's messages are persisted in Postgres so the agent retains full context across follow-up runs.
+
+---
+
+## Hardware
+
+| Component | Recommendation |
+|---|---|
+| Raspberry Pi | **Pi 5 8 GB** (recommended) — handles BLE, ffmpeg, and the server comfortably. Pi 4 works. Pi 3 is too slow. |
+| LEGO set | LEGO Boost (17101) — includes the Move Hub |
+| Camera | iPhone with [Larix Broadcaster](https://softvelum.com/larix/) or any RTMP source |
 
 ---
 
@@ -15,19 +25,11 @@ The AI receives the live camera frame and a goal (e.g. *"go to the kitchen"*). I
 | Layer | Tech |
 |---|---|
 | Frontend | React 19 + TanStack Router + Tailwind + shadcn/ui |
-| Server | Hono + Bun + AI SDK v6 (Gemini 2.5 Flash) |
+| Server | Hono + Bun + AI SDK v6 (GPT-4o / Gemini) |
 | Hub | FastAPI + pylgbst (BLE) |
 | Database | Neon Postgres + Drizzle ORM |
-| Camera | iPhone Larix → RTMP → MediaMTX |
+| Camera | iPhone Larix → RTMP → MediaMTX → `/tmp/snapshot.jpg` |
 | Monorepo | Turborepo + Bun workspaces |
-
----
-
-## Hardware
-
-- Raspberry Pi 3B+ or newer
-- LEGO Boost Move Hub
-- iPhone with [Larix Broadcaster](https://softvelum.com/larix/) or any RTMP source
 
 ---
 
@@ -66,14 +68,11 @@ Fill in `.env`:
 | Variable | Description |
 |---|---|
 | `DATABASE_URL` | Neon/Postgres connection string |
-| `OPENAI_API_KEY` | Gemini API key — [aistudio.google.com](https://aistudio.google.com) |
+| `OPENAI_API_KEY` | AI API key |
 | `HUB_MAC` | BLE MAC of your LEGO hub (leave empty for auto-discover) |
-| `RTSP_SNAPSHOT_URL` | RTSP stream used by the server to capture AI frames (e.g. `rtsp://192.168.0.123:8554/live/stream`) |
-| `MEDIAMTX_STREAM_PATH` | MediaMTX path name shared by RTMP/RTSP/WebRTC (default: `live/stream`) |
 | `VITE_API_URL` | Server URL reachable from your browser (e.g. `http://192.168.0.123:3000`) |
-| `VITE_MEDIAMTX_URL` | MediaMTX WebRTC URL reachable from your browser (e.g. `http://192.168.0.123:8889`) |
-| `VITE_MEDIAMTX_STREAM_PATH` | WebRTC stream path for the web player (must match `MEDIAMTX_STREAM_PATH`) |
 | `CORS_ORIGIN` | Browser origin (e.g. `http://192.168.0.123:3001`) |
+| `HF_API_TOKEN` | HuggingFace token for depth estimation (optional) |
 
 ### 5. Push database schema
 
@@ -91,6 +90,7 @@ bun run db:push
 
 That's it. The script:
 - Downloads the MediaMTX binary automatically if missing
+- Resets BLE state for the hub MAC before connecting
 - Starts MediaMTX, hub, server, and web UI in parallel
 - Prefixes each service's logs with a colour label
 - Shuts everything down cleanly on Ctrl+C
@@ -99,7 +99,7 @@ Services and ports:
 
 | Service | Port | What it does |
 |---|---|---|
-| MediaMTX | `:1935` (RTMP), `:8889` (WebRTC) | Ingests camera stream for live WebRTC view |
+| MediaMTX | `:1935` (RTMP), `:8554` (RTSP) | Ingests iPhone camera stream, writes snapshot to `/tmp/snapshot.jpg` |
 | Hub | `:8000` | FastAPI — BLE bridge to LEGO hub |
 | Server | `:3000` | Hono — AI orchestrator + sessions API |
 | Web | `:3001` | React operator UI |
@@ -113,28 +113,18 @@ In **Larix Broadcaster** on your iPhone:
 - **Connection URL**: `rtmp://<pi-ip>:1935/live/stream`
 - Get your Pi Wi-Fi IP: `ip addr show wlan0`
 
-The server captures each AI frame directly from `RTSP_SNAPSHOT_URL` using ffmpeg. The live WebRTC feed is embedded directly in the web UI.
+MediaMTX runs an ffmpeg process that writes `/tmp/snapshot.jpg` at 1 fps. The server reads that file each AI step (no per-step ffmpeg overhead). The web UI polls `/v1/snapshot` every 2 s to display it.
 
-> Start streaming before sending a session goal — the AI needs the RTSP stream to be reachable.
+> Start streaming before sending a session goal — the AI needs a snapshot to exist.
 
 ### Hotspot setup (recommended)
 
-If you are using a phone hotspot instead of a router:
-
 1. Turn on iPhone Personal Hotspot.
-2. Connect the Raspberry Pi and your control device (phone/laptop browser) to that same hotspot.
-3. On the Pi, get hotspot IP: `ip addr show wlan0` and copy the `inet` address (example: `192.168.0.112`).
-4. Set Larix URL to `rtmp://<pi-hotspot-ip>:1935/live/stream`.
-5. In `.env`, set:
-   - `RTSP_SNAPSHOT_URL=rtsp://localhost:8554/live/stream`
-   - `MEDIAMTX_STREAM_PATH=live/stream`
-   - `VITE_MEDIAMTX_URL=http://<pi-hotspot-ip>:8889`
-   - `VITE_MEDIAMTX_STREAM_PATH=live/stream`
-   - `VITE_API_URL=http://<pi-hotspot-ip>:3000`
-   - `CORS_ORIGIN=http://<pi-hotspot-ip>:3001`
-6. Restart `./start.sh` after env changes.
-
-If you see `no stream is available on path 'live/stream'`, Larix is not currently publishing to that exact path.
+2. Connect the Pi and your browser device to the same hotspot.
+3. Get the Pi's hotspot IP: `ip addr show wlan0` → copy the `inet` address.
+4. Set Larix URL to `rtmp://<pi-ip>:1935/live/stream`.
+5. In `.env` set `VITE_API_URL=http://<pi-ip>:3000` and `CORS_ORIGIN=http://<pi-ip>:3001`.
+6. Restart `./start.sh`.
 
 ---
 
@@ -146,6 +136,7 @@ GET  /v1/sessions/:id                       Poll status
 POST /v1/sessions/:id/stop                  Emergency stop
 POST /v1/execute            { goal }        Stateless one-shot run
 GET  /v1/health                             Server + hub status
+GET  /v1/snapshot                           Latest camera JPEG
 ```
 
 ---
@@ -158,10 +149,10 @@ boost/
 │   ├── server/src/
 │   │   ├── lib/
 │   │   │   ├── hub/         HubClient (ky HTTP) + requireHub guard
-│   │   │   ├── prompts/     Modular system prompt
+│   │   │   ├── prompts/     Modular system prompt (core · tools · reasoning · examples)
 │   │   │   └── tools/       forward · backward · turn · stop · complete
-│   │   ├── routes/          health · sessions · execute
-│   │   └── services/        orchestrator · frame (snapshot reader)
+│   │   ├── routes/          health · sessions · execute · snapshot
+│   │   └── services/        orchestrator · frame · depth
 │   ├── hub/                 FastAPI BLE control plane (pylgbst)
 │   └── web/                 React operator UI
 ├── packages/
@@ -170,7 +161,7 @@ boost/
 │   ├── validators/          Shared Zod schemas
 │   └── config/              Shared runtime config
 ├── mediamtx.yml             MediaMTX config
-├── mediamtx                 Binary (git-ignored — downloaded by start.sh)
+├── bin/mediamtx             Binary (git-ignored — downloaded by start.sh)
 └── start.sh                 Start everything
 ```
 
@@ -178,17 +169,8 @@ boost/
 
 ## BLE notes
 
-This project uses **pylgbst from GitHub** (not PyPI) plus two patches to the virtualenv for bleak 2.x compatibility:
-
-| Patch | Reason |
-|---|---|
-| `set_notify_handler` — extract `.handle` from `BleakGATTCharacteristic` | bleak 2.x changed callback signature |
-| uvicorn `--loop asyncio` | prevents uvloop from interfering with BlueZ D-Bus |
-
-**After reinstalling the hub virtualenv** (`poetry install`), re-apply patches:
-
-```bash
-cd apps/hub && poetry run python scripts/patch_bleak.py
-```
+This project uses **pylgbst from GitHub** (not PyPI) for bleak 2.x compatibility.
 
 Press the **green button** on the hub when the hub service starts — it needs to be in pairing/advertising mode for BLE discovery.
+
+`start.sh` automatically resets the BLE state for your `HUB_MAC` before starting the hub, which prevents stale connection issues across restarts.

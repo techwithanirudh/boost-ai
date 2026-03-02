@@ -97,13 +97,15 @@ class HubService:
                 dist = max(25.0, min(1000.0, payload.value))
                 secs = dist / (_CM_PER_SEC_AT_FULL * speed)
                 logger.info("forward %.1f cm → %.2f s @ speed=%.2f", dist, secs, speed)
-                hub.motor_AB.timed(secs, speed, speed, wait_complete=True)
+                hub.motor_AB.timed(secs, speed, speed, wait_complete=False)
+                time.sleep(secs + 0.1)
 
             elif action == "backward_cm":
                 dist = max(25.0, min(1000.0, payload.value))
                 secs = dist / (_CM_PER_SEC_AT_FULL * speed)
                 logger.info("backward %.1f cm → %.2f s @ speed=%.2f", dist, secs, speed)
-                hub.motor_AB.timed(secs, -speed, -speed, wait_complete=True)
+                hub.motor_AB.timed(secs, -speed, -speed, wait_complete=False)
+                time.sleep(secs + 0.1)
 
             elif action == "turn_deg":
                 deg = max(-90.0, min(90.0, payload.value))
@@ -114,8 +116,9 @@ class HubService:
                     secs,
                     direction * speed,
                     -direction * speed,
-                    wait_complete=True,
+                    wait_complete=False,
                 )
+                time.sleep(secs + 0.1)
 
             else:
                 return self._err(f"unknown_action: {action}")

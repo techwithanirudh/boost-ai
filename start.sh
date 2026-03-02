@@ -32,6 +32,9 @@ if [[ ! -x "$MEDIAMTX_BIN" ]]; then
   ok "mediamtx downloaded."
 fi
 
+info "Patching pylgbst…"
+(cd apps/hub && poetry run python scripts/patch_pylgbst.py)
+
 if [[ -n "$HUB_MAC" ]] && command -v bluetoothctl >/dev/null 2>&1; then
   warn "Resetting BLE state for HUB_MAC=${HUB_MAC}…"
   bluetoothctl disconnect "$HUB_MAC" >/dev/null 2>&1 || true
