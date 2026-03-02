@@ -11,8 +11,9 @@ from .safety import Watchdog
 
 logger = logging.getLogger(__name__)
 
-_CM_PER_SEC_AT_FULL = 15.0   # cm/s at speed=1.0
 _DEG_PER_SEC_AT_FULL = 90.0  # degrees/s at speed=1.0 for a differential turn
+_MOTOR_DEG_PER_CM = 20.5  # encoder degrees per cm (56mm wheel diameter)
+
 
 class HubService:
     def __init__(self) -> None:
@@ -95,17 +96,15 @@ class HubService:
 
             elif action == "forward_cm":
                 dist = max(5.0, min(1000.0, payload.value))
-                secs = dist / (_CM_PER_SEC_AT_FULL * speed)
-                logger.info("forward %.1f cm → %.2f s @ speed=%.2f", dist, secs, speed)
-                hub.motor_AB.timed(secs, speed, speed, wait_complete=False)
-                time.sleep(secs + 0.1)
+                motor_deg = int(round(dist * _MOTOR_DEG_PER_CM))
+                logger.info("forward %.1f cm → %d motor° @ speed=%.2f", dist, motor_deg, speed)
+                hub.motor_AB.angled(motor_deg, speed, speed, wait_complete=True)
 
             elif action == "backward_cm":
                 dist = max(5.0, min(1000.0, payload.value))
-                secs = dist / (_CM_PER_SEC_AT_FULL * speed)
-                logger.info("backward %.1f cm → %.2f s @ speed=%.2f", dist, secs, speed)
-                hub.motor_AB.timed(secs, -speed, -speed, wait_complete=False)
-                time.sleep(secs + 0.1)
+                motor_deg = int(round(dist * _MOTOR_DEG_PER_CM))
+                logger.info("backward %.1f cm → %d motor° @ speed=%.2f", dist, motor_deg, speed)
+                hub.motor_AB.angled(motor_deg, -speed, -speed, wait_complete=True)
 
             elif action == "turn_deg":
                 deg = max(-90.0, min(90.0, payload.value))
@@ -116,9 +115,8 @@ class HubService:
                     secs,
                     direction * speed,
                     -direction * speed,
-                    wait_complete=False,
+                    wait_complete=True,
                 )
-                time.sleep(secs + 0.1)
 
             else:
                 return self._err(f"unknown_action: {action}")
@@ -170,9 +168,7 @@ class HubService:
             return
 
         try:
-            sensor.subscribe(
-                self._on_color_distance_update, mode=VisionSensor.COLOR_DISTANCE_FLOAT
-            )
+            sensor.subscribe(self._on_color_distance_update, mode=VisionSensor.COLOR_DISTANCE_FLOAT)
             cached_distance_inches = getattr(sensor, "distance", None)
             if isinstance(cached_distance_inches, (int, float)):
                 self._update_distance_cm(float(cached_distance_inches))

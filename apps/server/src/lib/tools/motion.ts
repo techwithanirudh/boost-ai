@@ -1,9 +1,8 @@
 import { tool } from "ai";
 import { z } from "zod";
 import { createLogger } from "@/lib/logger";
-import { fetchFrame } from "@/services/frame";
 import { hub } from "../hub";
-import { snapshotToModelOutput } from "./snapshot-output";
+import { captureSnapshot, snapshotToModelOutput } from "./snapshot-output";
 
 const CM_PER_SEC_AT_FULL = 15.0;
 
@@ -57,13 +56,7 @@ function createMotionTool(
         log.error({ error: result.error }, `${direction} failed`);
       }
 
-      let snapshot: string | null = null;
-      try {
-        const frame = await fetchFrame();
-        snapshot = frame.dataUrl;
-      } catch {
-        snapshot = null;
-      }
+      const snapshot = await captureSnapshot();
 
       return {
         data: result.data,

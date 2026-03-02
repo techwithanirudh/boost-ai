@@ -1,3 +1,20 @@
+import { fetchFrame } from "@/services/frame";
+
+const SNAPSHOT_TIMEOUT_MS = 3000;
+
+export async function captureSnapshot(): Promise<string | null> {
+  const timeout = new Promise<null>((resolve) =>
+    setTimeout(() => resolve(null), SNAPSHOT_TIMEOUT_MS)
+  );
+  const frame = await Promise.race([
+    fetchFrame()
+      .then((f) => f.dataUrl)
+      .catch(() => null),
+    timeout,
+  ]);
+  return frame;
+}
+
 export function snapshotToModelOutput(
   snapshot: string | null,
   textSummary: string

@@ -27,7 +27,5 @@ export function systemPrompt(): string {
 - **complete**: goal is visibly and verifiably achieved. Include a clear summary of what was done.
 
 ## Output Style
-Always include a short text explanation (1–3 sentences) before calling a tool. Be direct and concise. Do not re-state the user's goal on every step — focus on what you observe and what you intend to do next.
-
-Tool call arguments must be valid JSON objects. For tools with no arguments, pass an empty object: {}.`;
+Always include a short text explanation (1-3 sentences) before calling a tool. Be direct and concise. Do not re-state the user's goal on every step — focus on what you observe and what you intend to do next.`;
 }

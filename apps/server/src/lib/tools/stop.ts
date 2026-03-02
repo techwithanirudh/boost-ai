@@ -1,9 +1,8 @@
 import { tool } from "ai";
 import { z } from "zod";
 import { createLogger } from "@/lib/logger";
-import { fetchFrame } from "@/services/frame";
 import { hub } from "../hub";
-import { snapshotToModelOutput } from "./snapshot-output";
+import { captureSnapshot, snapshotToModelOutput } from "./snapshot-output";
 
 const log = createLogger("tool:stop");
 
@@ -31,13 +30,7 @@ export const stopTool = tool({
       log.error({ error: result.error }, "stop failed");
     }
 
-    let snapshot: string | null = null;
-    try {
-      const frame = await fetchFrame();
-      snapshot = frame.dataUrl;
-    } catch {
-      snapshot = null;
-    }
+    const snapshot = await captureSnapshot();
 
     return { data: result.data, error: result.error, ok: result.ok, snapshot };
   },

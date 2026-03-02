@@ -117,7 +117,7 @@ function SessionPage() {
   return (
     <main className="mx-auto grid h-full min-h-0 w-full max-w-5xl gap-3 p-3 md:grid-cols-[minmax(0,1fr)_280px]">
       <section className="grid min-h-0 grid-rows-[1fr_auto] gap-3">
-        <Card className="min-h-0 overflow-hidden border p-0 gap-0">
+        <Card className="min-h-0 gap-0 overflow-hidden border p-0">
           {displayTitle ? (
             <div className="border-b px-3 py-2">
               <p className="truncate font-medium text-sm">{displayTitle}</p>

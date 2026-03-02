@@ -18,3 +18,4 @@ Add depth map as a second image part in the AI user message.
 - Don't pass task on session create, it restarts the task
 - Padding not equal in chat view
 - Don't allow to create new sessions when running...
+- pass image at first too, not only on tool call

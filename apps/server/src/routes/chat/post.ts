@@ -95,6 +95,12 @@ export async function postChat(request: Request): Promise<Response> {
         messages: await convertToModelMessages(messages, { tools: toolSet }),
         tools: toolSet,
         toolChoice: "required",
+        providerOptions: {
+          openai: {
+            store: false,
+            include: ["reasoning.encrypted_content"],
+          },
+        },
         experimental_repairToolCall: async ({
           toolCall,
           tools,
