@@ -1,21 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { Camera } from "lucide-react";
-
-async function pollSnapshot(): Promise<number | null> {
-  const res = await fetch("/api/v1/snapshot", { method: "HEAD" }).catch(
-    () => null
-  );
-  return res?.ok ? Date.now() : null;
-}
+import { snapshotQuery } from "@/lib/queries/snapshot";
 
 export function CameraFeed() {
-  const { data: tick } = useQuery({
-    queryKey: ["snapshot"],
-    queryFn: pollSnapshot,
-    refetchInterval: 2000,
-    retry: false,
-    staleTime: 0,
-  });
+  const { data: tick } = useQuery(snapshotQuery);
 
   if (!tick) {
     return (

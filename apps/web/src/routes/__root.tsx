@@ -1,3 +1,4 @@
+import type { QueryClient } from "@tanstack/react-query";
 import {
   createRootRouteWithContext,
   HeadContent,
@@ -12,7 +13,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 
 import "../index.css";
 
-export type RouterAppContext = Record<string, never>;
+export interface RouterAppContext {
+  queryClient: QueryClient;
+}
 
 export const Route = createRootRouteWithContext<RouterAppContext>()({
   component: RootComponent,

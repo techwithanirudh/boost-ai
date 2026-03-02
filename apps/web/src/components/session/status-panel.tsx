@@ -4,24 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-
-interface HealthData {
-  hub?: { ok: boolean; error?: string | null };
-  service?: string;
-}
-
-interface HealthResponse {
-  data?: HealthData | null;
-}
-
-async function fetchHealth(): Promise<HealthData | null> {
-  const res = await fetch("/api/v1/health");
-  if (!res.ok) {
-    throw new Error("health_request_failed");
-  }
-  const payload = (await res.json()) as HealthResponse;
-  return payload.data ?? null;
-}
+import { healthQuery } from "@/lib/queries/health";
 
 function chatStatusVariant(
   label: string
@@ -56,23 +39,18 @@ export function StatusPanel({
   isRunning,
   onStop,
 }: StatusPanelProps) {
-  const { data: health } = useQuery({
-    queryKey: ["health"],
-    queryFn: fetchHealth,
-    refetchInterval: 5000,
-    retry: false,
-  });
+  const { data: health } = useQuery(healthQuery);
 
   const hubOk = health?.hub?.ok ?? null;
   const hubError = health?.hub?.error ?? null;
   const label = chatStatusLabel(chatStatus);
 
   return (
-    <Card className="overflow-hidden border p-0">
+    <Card className="flex min-h-0 flex-1 flex-col overflow-hidden border p-0">
       <div className="border-b px-3 py-2">
         <p className="font-medium text-sm">Status</p>
       </div>
-      <div className="p-3">
+      <div className="flex min-h-0 flex-1 flex-col p-3">
         <dl className="space-y-2 text-sm">
           <div className="flex items-center justify-between">
             <dt className="flex items-center gap-1.5 text-muted-foreground">
@@ -109,7 +87,7 @@ export function StatusPanel({
         ) : null}
 
         {isRunning ? (
-          <>
+          <div className="mt-auto">
             <Separator className="my-3" />
             <Button
               className="w-full"
@@ -120,7 +98,7 @@ export function StatusPanel({
               <Square className="mr-1.5 size-3.5 fill-current" />
               Stop
             </Button>
-          </>
+          </div>
         ) : null}
       </div>
     </Card>

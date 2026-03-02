@@ -7,30 +7,22 @@ import {
   NewTaskForm,
   type NewTaskFormValues,
 } from "@/components/new-task-form";
-import { type ChatListItem, Sessions } from "@/components/sessions";
+import { Sessions } from "@/components/sessions";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { chatHistoryQuery } from "@/lib/queries/chats";
 
 export const Route = createFileRoute("/")({
+  loader: ({ context }) => context.queryClient.ensureQueryData(chatHistoryQuery),
   component: HomePage,
 });
-
-async function fetchChatHistory(): Promise<ChatListItem[]> {
-  const res = await fetch("/api/v1/chat");
-  if (!res.ok) {
-    throw new Error("Failed to load history");
-  }
-  const payload = (await res.json()) as { data?: ChatListItem[] };
-  return payload.data ?? [];
-}
 
 function HomePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = Route.useNavigate();
 
   const { data: history = [], isPending: isLoadingHistory } = useQuery({
-    queryKey: ["chats"],
-    queryFn: fetchChatHistory,
+    ...chatHistoryQuery,
   });
 
   const start = ({ task }: NewTaskFormValues, reset: () => void) => {
