@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { chat } from "./routes/chat";
-import { health } from "./routes/health";
+import { healthRouter as health } from "./routes/health";
 import { snapshot } from "./routes/snapshot";
 
 const app = new Hono();
