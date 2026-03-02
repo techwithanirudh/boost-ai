@@ -18,6 +18,7 @@ export interface HubHealthData {
 }
 
 export interface HubStateData {
+  battery: number | null;
   connected: boolean;
   distance: number | null;
 }

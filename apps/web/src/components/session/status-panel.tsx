@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import type { ChatStatus } from "ai";
-import { Activity, Bot, Square } from "lucide-react";
+import { Activity, BatteryMedium, Bot, Square } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -44,6 +44,7 @@ export function StatusPanel({
 
   const hubOk = health?.hub?.ok ?? null;
   const hubError = health?.hub?.error ?? null;
+  const battery = health?.hub?.battery ?? null;
   const label = chatStatusLabel(chatStatus);
 
   return (
@@ -79,6 +80,15 @@ export function StatusPanel({
               )}
             </dd>
           </div>
+          {battery !== null ? (
+            <div className="flex items-center justify-between">
+              <dt className="flex items-center gap-1.5 text-muted-foreground">
+                <BatteryMedium className="size-3.5" />
+                Battery
+              </dt>
+              <dd className="text-sm">{battery}%</dd>
+            </div>
+          ) : null}
         </dl>
 
         {hubError ? (

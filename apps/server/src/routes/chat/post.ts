@@ -12,6 +12,7 @@ import {
   stepCountIs,
   streamText,
   type UIMessage,
+  type UserContent,
 } from "ai";
 import { z } from "zod";
 import { createLogger } from "@/lib/logger";
@@ -20,6 +21,7 @@ import { provider } from "@/lib/providers";
 import { getResumableStreamContext } from "@/lib/resume-stream";
 import { generateTitleFromUserMessage } from "@/lib/title";
 import { toolSet } from "@/lib/tools";
+import { fetchFrame } from "@/services/frame";
 
 const log = createLogger("chat");
 
@@ -101,12 +103,13 @@ export async function postChat(request: Request): Promise<Response> {
             include: ["reasoning.encrypted_content"],
           },
         },
+
         experimental_repairToolCall: async ({
           toolCall,
           tools,
           inputSchema,
           system,
-          messages,
+          messages: repairMessages,
         }) => {
           const tool = tools[toolCall.toolName as keyof typeof tools];
           if (!tool) {
@@ -122,7 +125,7 @@ export async function postChat(request: Request): Promise<Response> {
             }),
             system,
             messages: [
-              ...messages,
+              ...repairMessages,
               {
                 role: "assistant",
                 content: [
@@ -139,17 +142,50 @@ export async function postChat(request: Request): Promise<Response> {
 
           return { ...toolCall, input: JSON.stringify(repairedArgs) };
         },
+
+        prepareStep: async ({ messages: stepMessages, stepNumber }) => {
+          if (stepNumber > 0) {
+            return {
+              messages: pruneMessages({
+                messages: stepMessages,
+                toolCalls: "before-last-2-messages",
+              }),
+            };
+          }
+
+          let frame: Awaited<ReturnType<typeof fetchFrame>> | null = null;
+          try {
+            frame = await fetchFrame();
+          } catch {
+            return {
+              messages: pruneMessages({
+                messages: stepMessages,
+                toolCalls: "before-last-2-messages",
+              }),
+            };
+          }
+
+          const userContent: UserContent = [
+            { type: "image", image: frame.dataUrl },
+            { type: "text", text: "Current camera frame attached." },
+          ];
+
+          return {
+            messages: pruneMessages({
+              messages: [
+                ...stepMessages,
+                { role: "user", content: userContent },
+              ],
+              toolCalls: "before-last-2-messages",
+            }),
+          };
+        },
+
         stopWhen: [
           hasToolCall("complete"),
           hasToolCall("stop"),
           stepCountIs(config.ai.maxSteps),
         ],
-        prepareStep: ({ messages: stepMessages }) => ({
-          messages: pruneMessages({
-            messages: stepMessages,
-            toolCalls: "before-last-2-messages",
-          }),
-        }),
       });
 
       writer.merge(result.toUIMessageStream());

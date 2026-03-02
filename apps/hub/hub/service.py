@@ -13,6 +13,8 @@ logger = logging.getLogger(__name__)
 
 _DEG_PER_SEC_AT_FULL = 90.0  # degrees/s at speed=1.0 for a differential turn
 _MOTOR_DEG_PER_CM = 20.5  # encoder degrees per cm (56mm wheel diameter)
+_EXTERNAL_HOLD_TARGET_DEG = -1
+_BATTERY_MAX_VOLTS = 9.6  # 6×AA alkaline full charge (~1.6V/cell)
 
 
 class HubService:
@@ -77,9 +79,17 @@ class HubService:
         logger.info("Disconnected from LEGO Boost hub")
 
     def state(self) -> dict[str, Any]:
+        battery: int | None = None
+        if self._hub is not None and self._hub.voltage is not None:
+            try:
+                volts = self._hub.voltage.voltage
+                battery = max(0, min(100, round(volts / _BATTERY_MAX_VOLTS * 100)))
+            except Exception:
+                pass
         return {
             "connected": self.connected,
             "distance": self._distance,
+            "battery": battery,
         }
 
     def execute(self, payload: ExecuteMotionCommand) -> dict[str, Any]:

@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 interface HealthData {
-  hub?: { ok: boolean; error?: string | null };
+  hub?: { ok: boolean; error?: string | null; battery?: number | null };
   service?: string;
 }
 
