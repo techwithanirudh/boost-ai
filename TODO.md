@@ -21,3 +21,4 @@ Add depth map as a second image part in the AI user message.
 - pass image at first too, not only on tool call
 - show portrait view for camera preview
 - update title on gen dont wait til reload
+- sometimes stream is broken
