@@ -16,6 +16,11 @@
       "sourceType": "github",
       "computedHash": "c7a4ae9efeb7ef47c6473ee4d636fced825a0c26b25372a49417075f6d566af6"
     },
+    "tsdown": {
+      "source": "antfu/skills",
+      "sourceType": "github",
+      "computedHash": "0230aa0d3df7c839d7cd3efa34cf18cf203da79a06c02fc8ebfdb6cd4142b593"
+    },
     "turborepo": {
       "source": "vercel/turborepo",
       "sourceType": "github",
