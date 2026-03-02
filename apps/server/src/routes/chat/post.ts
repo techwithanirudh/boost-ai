@@ -85,7 +85,7 @@ export async function postChat(request: Request): Promise<Response> {
   }
 
   const stream = createUIMessageStream({
-    originalMessages: requestedMessages ? messages : undefined,
+    originalMessages: messages,
     execute: async ({ writer }) => {
       const result = streamText({
         model: provider.languageModel("chat-model"),

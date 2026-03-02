@@ -5,7 +5,7 @@ import { ModeToggle } from "@/components/mode-toggle";
 export function AppHeader() {
   return (
     <header className="w-full border-b bg-background/95 backdrop-blur">
-      <div className="flex h-14 w-full items-center gap-3 px-4">
+      <div className="mx-auto flex h-14 w-full max-w-5xl items-center gap-3 px-4">
         <Link
           className="flex min-w-0 items-center gap-2 rounded-md px-1 py-0.5 hover:opacity-80"
           to="/"
