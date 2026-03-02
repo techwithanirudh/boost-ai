@@ -48,8 +48,14 @@ export const Route = createFileRoute("/session/$id")({
   validateSearch: searchSchema,
   loader: async ({ params }) => {
     const response = await fetch(`/api/v1/chat/${params.id}`).catch(() => null);
-    if (!response?.ok) {
-      return { messages: [] as UIMessage[], title: null };
+    if (!response) {
+      throw new Error("Network error — could not reach the server");
+    }
+    if (response.status === 404) {
+      throw new Error("Chat not found");
+    }
+    if (!response.ok) {
+      throw new Error(`Server error (${response.status})`);
     }
     const payload = (await response.json()) as ChatResponse;
     return {

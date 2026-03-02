@@ -7,3 +7,7 @@ Add depth map as a second image part in the AI user message.
 - Sidecar: https://github.com/apple/ml-depth-pro
 - In `apps/server/src/services/orchestrator.ts` add `{ type: "image", image: depthMapUrl }` alongside the RGB frame already passed to the model.
 - Use tanstack query for calling APIs, and use heyapi for hub logic... re-add all shadcn components
+
+- The loading skeleton for AI Chat is irritating
+- If the health status for boost is unhealthy block the whole app-ish becausew whole app rlies on boost
+- If boost is disconnected again, always reconnect, indicdate in api tooand frontend

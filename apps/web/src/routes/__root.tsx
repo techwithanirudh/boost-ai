@@ -21,17 +21,22 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
   head: () => ({
     meta: [
       {
-        title: "boost",
+        title: "Boost Control",
       },
       {
         name: "description",
-        content: "boost is a web application",
+        content: "LEGO Boost autonomous robot control interface",
       },
     ],
     links: [
       {
         rel: "icon",
-        href: "/favicon.ico",
+        type: "image/png",
+        href: "/icon.png",
+      },
+      {
+        rel: "apple-touch-icon",
+        href: "/icon-256.png",
       },
     ],
   }),

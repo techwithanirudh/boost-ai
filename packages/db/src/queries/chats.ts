@@ -29,17 +29,23 @@ export async function listChats(limit = 50): Promise<ChatRow[]> {
   return rows;
 }
 
-export async function readChat(id: string): Promise<ChatRow> {
+/** Returns null when no chat with that id exists. Does NOT auto-create. */
+export async function findChat(id: string): Promise<ChatRow | null> {
   const existing = await db
     .select()
     .from(chats)
     .where(eq(chats.id, id))
     .limit(1);
 
-  if (existing[0]) {
-    return existing[0];
-  }
+  return existing[0] ?? null;
+}
 
+/** Reads a chat, auto-creating it if it doesn't exist yet. */
+export async function readChat(id: string): Promise<ChatRow> {
+  const existing = await findChat(id);
+  if (existing) {
+    return existing;
+  }
   return createChat(id);
 }
 
@@ -50,8 +56,6 @@ export async function saveChat(params: {
   status?: ChatStatus;
   title?: string;
 }): Promise<void> {
-  await readChat(params.id);
-
   await db
     .update(chats)
     .set({

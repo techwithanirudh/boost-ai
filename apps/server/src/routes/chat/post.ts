@@ -84,6 +84,9 @@ export async function postChat(request: Request): Promise<Response> {
     );
   }
 
+  // Track whether onError fired so onFinish doesn't overwrite the error status
+  let streamErrored = false;
+
   const stream = createUIMessageStream({
     originalMessages: messages,
     execute: async ({ writer }) => {
@@ -107,28 +110,42 @@ export async function postChat(request: Request): Promise<Response> {
       });
 
       writer.merge(result.toUIMessageStream({ sendReasoning: true }));
+
+      // Fire title generation after stream content is written, non-blocking
       if (titlePromise) {
-        const title = await titlePromise;
-        if (title) {
-          await saveChat({ id, title });
-          writer.write({ type: "data-chat-title", data: title });
-        }
+        titlePromise.then(async (title) => {
+          if (title) {
+            try {
+              await saveChat({ id, title });
+              writer.write({ type: "data-chat-title", data: title });
+            } catch (err) {
+              log.warn({ err, id }, "Failed to save title");
+            }
+          }
+        });
       }
     },
     generateId,
-    onFinish: async ({ messages: finishedMessages }) => {
+    onFinish: async ({ messages: finishedMessages, isAborted }) => {
+      if (streamErrored) {
+        return;
+      }
+      // If stream was aborted or hit the step limit without a stop/complete
+      // tool call, mark as stopped rather than completed
+      const finalStatus = isAborted ? "stopped" : "completed";
       try {
         await saveChat({
           id,
           activeStreamId: null,
           messages: finishedMessages,
-          status: "completed",
+          status: finalStatus,
         });
       } catch (err) {
         log.error({ err, id }, "Failed to save chat on finish");
       }
     },
     onError: (err) => {
+      streamErrored = true;
       log.error({ err, id }, "Stream error");
       saveChat({ id, activeStreamId: null, status: "stopped" }).catch(
         (saveErr) =>

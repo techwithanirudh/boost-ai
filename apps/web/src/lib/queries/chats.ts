@@ -4,7 +4,7 @@ import type { ChatListItem } from "@/components/sessions";
 async function fetchChatHistory(): Promise<ChatListItem[]> {
   const res = await fetch("/api/v1/chat");
   if (!res.ok) {
-    throw new Error("Failed to load history");
+    throw new Error(`Failed to load history (${res.status})`);
   }
   const payload = (await res.json()) as { data?: ChatListItem[] };
   return payload.data ?? [];

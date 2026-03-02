@@ -23,11 +23,20 @@ export function getResumableStreamContext(): ResumableStreamContext | null {
     const publisher = new Redis(env.REDIS_URL, { lazyConnect: true });
     const subscriber = new Redis(env.REDIS_URL, { lazyConnect: true });
 
+    publisher.on("error", (err) => log.error({ err }, "Redis publisher error"));
+    subscriber.on("error", (err) =>
+      log.error({ err }, "Redis subscriber error")
+    );
+
     streamContext = createResumableStreamContext({
       keyPrefix: "boost-session",
       publisher,
       subscriber,
-      waitUntil: null,
+      waitUntil: (promise) => {
+        promise.catch((err) =>
+          log.error({ err }, "Error in resumable stream waitUntil")
+        );
+      },
     });
 
     return streamContext;

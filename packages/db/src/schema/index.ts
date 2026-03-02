@@ -17,5 +17,6 @@ export const chats = pgTable("chats", {
     .notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .defaultNow()
+    .$onUpdateFn(() => new Date())
     .notNull(),
 });
