@@ -1,14 +1,18 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
-import { Button } from "@/components/ui/button";
 import {
   Field,
   FieldError,
   FieldGroup,
   FieldLabel,
 } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "@/components/ui/input-group";
 
 const formSchema = z.object({
   message: z
@@ -48,28 +52,31 @@ export function NewTaskForm({
           render={({ field, fieldState }) => (
             <Field data-invalid={fieldState.invalid}>
               <FieldLabel htmlFor="task">Task</FieldLabel>
-              <Input
-                {...field}
-                aria-invalid={fieldState.invalid}
-                autoComplete="off"
-                autoFocus
-                id="task"
-                placeholder="e.g. move forward slowly and inspect nearby objects"
-              />
+              <InputGroup>
+                <InputGroupInput
+                  {...field}
+                  aria-invalid={fieldState.invalid}
+                  autoComplete="off"
+                  autoFocus
+                  id="task"
+                  placeholder="e.g. move forward slowly and inspect nearby objects"
+                />
+                <InputGroupAddon align="inline-end">
+                  <InputGroupButton
+                    aria-label="Start"
+                    disabled={isSubmitting || form.formState.isSubmitting}
+                    type="submit"
+                  >
+                    Start
+                  </InputGroupButton>
+                </InputGroupAddon>
+              </InputGroup>
               {fieldState.invalid ? (
                 <FieldError errors={[fieldState.error]} />
               ) : null}
             </Field>
           )}
         />
-        <Field orientation="horizontal">
-          <Button
-            disabled={isSubmitting || form.formState.isSubmitting}
-            type="submit"
-          >
-            Start
-          </Button>
-        </Field>
       </FieldGroup>
     </form>
   );
