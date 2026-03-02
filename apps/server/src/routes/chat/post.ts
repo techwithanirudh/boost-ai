@@ -106,7 +106,7 @@ export async function postChat(request: Request): Promise<Response> {
         }),
       });
 
-      writer.merge(result.toUIMessageStream({ sendReasoning: true }));
+      writer.merge(result.toUIMessageStream());
 
       if (titlePromise) {
         titlePromise.then(async (title) => {

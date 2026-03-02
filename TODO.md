@@ -11,3 +11,4 @@ Add depth map as a second image part in the AI user message.
 - The loading skeleton for AI Chat is irritating
 - If the health status for boost is unhealthy block the whole app-ish becausew whole app rlies on boost
 - If boost is disconnected again, always reconnect, indicdate in api tooand frontend
+- The title code is cluttered
