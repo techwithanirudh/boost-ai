@@ -15,10 +15,10 @@ import {
 } from "@/components/ui/input-group";
 
 const formSchema = z.object({
-  message: z
+  task: z
     .string()
-    .min(3, "Message must be at least 3 characters.")
-    .max(400, "Message must be at most 400 characters."),
+    .min(3, "Task must be at least 3 characters.")
+    .max(400, "Task must be at most 400 characters."),
 });
 
 export type NewTaskFormValues = z.infer<typeof formSchema>;
@@ -35,7 +35,7 @@ export function NewTaskForm({
 }) {
   const form = useForm<NewTaskFormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: { message: "" },
+    defaultValues: { task: "" },
     mode: "onChange",
   });
 
@@ -48,7 +48,7 @@ export function NewTaskForm({
       <FieldGroup>
         <Controller
           control={form.control}
-          name="message"
+          name="task"
           render={({ field, fieldState }) => (
             <Field data-invalid={fieldState.invalid}>
               <FieldLabel htmlFor="task">Task</FieldLabel>

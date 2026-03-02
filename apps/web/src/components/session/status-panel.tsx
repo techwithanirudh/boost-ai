@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
-import { Bot, ShieldAlert, Square } from "lucide-react";
+import { Activity, Bot, Square } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 
 interface HealthData {
@@ -23,14 +23,16 @@ async function fetchHealth(): Promise<HealthData | null> {
   return payload.data ?? null;
 }
 
-function chatStatusVariant(status: string) {
-  if (status === "running") {
-    return "default" as const;
+function chatStatusVariant(
+  label: string
+): "default" | "secondary" | "destructive" {
+  if (label === "running") {
+    return "default";
   }
-  if (status === "error") {
-    return "destructive" as const;
+  if (label === "error") {
+    return "destructive";
   }
-  return "secondary" as const;
+  return "secondary";
 }
 
 function chatStatusLabel(status: string): string {
@@ -47,14 +49,12 @@ interface StatusPanelProps {
   chatStatus: string;
   isRunning: boolean;
   onStop: () => void;
-  toolCallCount: number;
 }
 
 export function StatusPanel({
   chatStatus,
   isRunning,
   onStop,
-  toolCallCount,
 }: StatusPanelProps) {
   const { data: health } = useQuery({
     queryKey: ["health"],
@@ -68,15 +68,15 @@ export function StatusPanel({
   const label = chatStatusLabel(chatStatus);
 
   return (
-    <Card className="border p-3">
-      <CardHeader className="p-0 pb-2">
+    <Card className="overflow-hidden border p-0">
+      <div className="border-b px-3 py-2">
         <p className="font-medium text-sm">Status</p>
-      </CardHeader>
-      <CardContent className="p-0">
+      </div>
+      <div className="p-3">
         <dl className="space-y-2 text-sm">
           <div className="flex items-center justify-between">
             <dt className="flex items-center gap-1.5 text-muted-foreground">
-              <ShieldAlert className="size-3.5" />
+              <Activity className="size-3.5" />
               Chat
             </dt>
             <dd>
@@ -100,10 +100,6 @@ export function StatusPanel({
               )}
             </dd>
           </div>
-          <div className="flex items-center justify-between">
-            <dt className="text-muted-foreground">Tool calls</dt>
-            <dd className="tabular-nums">{toolCallCount}</dd>
-          </div>
         </dl>
 
         {hubError ? (
@@ -122,11 +118,11 @@ export function StatusPanel({
               variant="destructive"
             >
               <Square className="mr-1.5 size-3.5 fill-current" />
-              Emergency Stop
+              Stop
             </Button>
           </>
         ) : null}
-      </CardContent>
+      </div>
     </Card>
   );
 }

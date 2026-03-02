@@ -41,7 +41,7 @@ interface ChatResponse {
 }
 
 const searchSchema = z.object({
-  message: z.string().optional(),
+  task: z.string().optional(),
 });
 
 export const Route = createFileRoute("/session/$id")({
@@ -73,7 +73,7 @@ const transport = new DefaultChatTransport({
 
 function SessionPage() {
   const { id } = Route.useParams();
-  const { message: initialGoal } = Route.useSearch();
+  const { task: initialGoal } = Route.useSearch();
   const chat = Route.useLoaderData();
   const hasSentInitial = useRef(false);
 
@@ -103,20 +103,6 @@ function SessionPage() {
     }
   }, [initialGoal, messages.length, status, sendMessage]);
 
-  const toolCallCount = useMemo(
-    () =>
-      messages.reduce(
-        (count, message) =>
-          count +
-          message.parts.filter((p) => {
-            const type = asString(asRecord(p)?.type);
-            return type?.startsWith("tool-") ?? false;
-          }).length,
-        0
-      ),
-    [messages]
-  );
-
   const isRunning = status === "streaming" || status === "submitted";
 
   const submitPrompt = ({ text }: PromptInputMessage) => {
@@ -127,10 +113,17 @@ function SessionPage() {
     sendMessage({ text: trimmed });
   };
 
+  const title = chat.title && chat.title !== "New chat" ? chat.title : null;
+
   return (
     <main className="grid h-full min-h-0 gap-3 p-3 md:grid-cols-[minmax(0,1fr)_300px]">
       <section className="grid min-h-0 grid-rows-[1fr_auto] gap-3">
         <Card className="min-h-0 overflow-hidden border p-0">
+          {title ? (
+            <div className="border-b px-3 py-2">
+              <p className="truncate font-medium text-sm">{title}</p>
+            </div>
+          ) : null}
           <Conversation>
             <ConversationContent className="px-3 py-3">
               {messages.length > 0 ? (
@@ -196,17 +189,16 @@ function SessionPage() {
       </section>
 
       <aside className="flex min-h-0 flex-col gap-3">
-        <Card className="border p-3">
-          <p className="mb-2 font-medium text-sm">Camera</p>
-          <CameraFeed />
+        <Card className="overflow-hidden border p-0">
+          <div className="border-b px-3 py-2">
+            <p className="font-medium text-sm">Camera</p>
+          </div>
+          <div className="p-3">
+            <CameraFeed />
+          </div>
         </Card>
 
-        <StatusPanel
-          chatStatus={status}
-          isRunning={isRunning}
-          onStop={stop}
-          toolCallCount={toolCallCount}
-        />
+        <StatusPanel chatStatus={status} isRunning={isRunning} onStop={stop} />
       </aside>
     </main>
   );
