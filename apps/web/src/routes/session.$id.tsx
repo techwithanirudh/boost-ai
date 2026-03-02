@@ -79,7 +79,6 @@ function SessionPage() {
   const { id } = Route.useParams();
   const { task: initialTask } = Route.useSearch();
   const { messages: initialMessages, title } = Route.useLoaderData();
-  const hasSentInitial = useRef(false);
   const pendingTask = useRef(initialTask ?? null);
 
   const { messages, sendMessage, status, stop } = useChat({
@@ -93,14 +92,16 @@ function SessionPage() {
     },
   });
 
+  const navigate = Route.useNavigate();
+
   useEffect(() => {
-    if (status === "ready" && pendingTask.current && !hasSentInitial.current) {
-      hasSentInitial.current = true;
+    if (status === "ready" && pendingTask.current) {
       const task = pendingTask.current;
       pendingTask.current = null;
       sendMessage({ text: task });
+      navigate({ search: {}, replace: true });
     }
-  }, [status, sendMessage]);
+  }, [status, sendMessage, navigate]);
 
   const isRunning = status === "streaming" || status === "submitted";
   const displayTitle = title && title !== "New chat" ? title : null;
@@ -116,14 +117,14 @@ function SessionPage() {
   return (
     <main className="mx-auto grid h-full min-h-0 w-full max-w-5xl gap-3 p-3 md:grid-cols-[minmax(0,1fr)_280px]">
       <section className="grid min-h-0 grid-rows-[1fr_auto] gap-3">
-        <Card className="min-h-0 overflow-hidden border p-0">
+        <Card className="min-h-0 overflow-hidden border p-0 gap-0">
           {displayTitle ? (
             <div className="border-b px-3 py-2">
               <p className="truncate font-medium text-sm">{displayTitle}</p>
             </div>
           ) : null}
           <Conversation>
-            <ConversationContent className="px-3 py-3">
+            <ConversationContent className="px-3 py-7">
               {messages.length > 0 ? (
                 messages.map((message) => (
                   <Message from={message.role} key={message.id}>

@@ -64,7 +64,7 @@ export async function postChat(request: Request): Promise<Response> {
 
   const shouldGenerateTitle =
     chat.title === "New chat" && incomingMessage?.role === "user";
-  const titlePromise = shouldGenerateTitle
+  const titlePromise: Promise<string | null> | null = shouldGenerateTitle
     ? generateTitleFromUserMessage(incomingMessage).catch((err) => {
         log.warn({ err, id }, "Title generation failed");
         return null;
@@ -148,17 +148,12 @@ export async function postChat(request: Request): Promise<Response> {
 
       writer.merge(result.toUIMessageStream());
 
-      if (titlePromise) {
-        titlePromise.then(async (title) => {
-          if (title) {
-            try {
-              await saveChat({ id, title });
-              writer.write({ type: "data-chat-title", data: title });
-            } catch (err) {
-              log.warn({ err, id }, "Failed to save title");
-            }
-          }
-        });
+      const title = await titlePromise;
+      if (title) {
+        writer.write({ type: "data-chat-title", data: title });
+        saveChat({ id, title }).catch((err) =>
+          log.warn({ err, id }, "Failed to save title")
+        );
       }
     },
     generateId,

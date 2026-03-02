@@ -11,7 +11,10 @@ Add depth map as a second image part in the AI user message.
 - The loading skeleton for AI Chat is irritating
 - If the health status for boost is unhealthy block the whole app-ish becausew whole app rlies on boost
 - If boost is disconnected again, always reconnect, indicdate in api tooand frontend
-- The title code is cluttered
+- The title code is cluttered / cursed
 - Inject movement map (6 images)
-- Take tool snapshot at final, not half way
+- Take tool snapshot at final, not half way for tools
 - delete getPosition tool
+- Don't pass task on session create, it restarts the task
+- Padding not equal in chat view
+- Don't allow to create new sessions when running...

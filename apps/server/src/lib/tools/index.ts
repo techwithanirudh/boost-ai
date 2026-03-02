@@ -1,6 +1,5 @@
 import { completeTool } from "./complete-session";
 import { getHealthTool } from "./get-health";
-import { getPositionTool } from "./get-position";
 import { backwardTool, forwardTool } from "./motion";
 import { stopTool } from "./stop";
 import { turnTool } from "./turn";
@@ -10,7 +9,6 @@ export const toolSet = {
   complete: completeTool,
   forward: forwardTool,
   getHealth: getHealthTool,
-  getPosition: getPositionTool,
   stop: stopTool,
   turn: turnTool,
 };
