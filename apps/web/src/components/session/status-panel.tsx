@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { ChatStatus } from "ai";
-import { Activity, BatteryMedium, Bot, Square } from "lucide-react";
+import { Activity, Bot, Square, Zap } from "lucide-react";
+import { Battery } from "@/components/session/battery-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -80,15 +81,17 @@ export function StatusPanel({
               )}
             </dd>
           </div>
-          {battery !== null ? (
+          {battery !== null && (
             <div className="flex items-center justify-between">
               <dt className="flex items-center gap-1.5 text-muted-foreground">
-                <BatteryMedium className="size-3.5" />
+                <Zap className="size-3.5" />
                 Battery
               </dt>
-              <dd className="text-sm">{battery}%</dd>
+              <dd>
+                <Battery level={battery} />
+              </dd>
             </div>
-          ) : null}
+          )}
         </dl>
 
         {hubError ? (
