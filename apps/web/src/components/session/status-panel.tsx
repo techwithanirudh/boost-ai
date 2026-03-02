@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { healthQuery } from "@/lib/queries/health";
+import { healthQuery } from "@/lib/queries";
 
 function chatStatusVariant(
   label: string

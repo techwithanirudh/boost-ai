@@ -10,7 +10,7 @@ import {
 import { Sessions } from "@/components/sessions";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { chatHistoryQuery } from "@/lib/queries/chats";
+import { chatHistoryQuery } from "@/lib/queries";
 
 export const Route = createFileRoute("/")({
   loader: ({ context }) => context.queryClient.ensureQueryData(chatHistoryQuery),

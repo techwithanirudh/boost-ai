@@ -1,5 +1,6 @@
 - Write server log to a file
 - Switch camera feed in web UI from MediaMTX WebRTC iframe to Vidstack (HLS provider) for a proper player with controls — see https://www.vidstack.io and https://github.com/techwithanirudh/portfolio for implementation reference
+- **`prepareStep` image pruning**: replace `pruneMessages({ toolCalls: "before-last-2-messages" })` with a custom function that strips only `{ type: "media" }` parts from old tool result outputs, keeping all tool call/result text intact. This preserves the model's action history (e.g. "I already turned right twice") while still preventing image token blowup — the best of all three approaches (main branch, old user-message injection, current pruneMessages).
 
 ## Depth Map (ml-depth-pro)
 Add depth map as a second image part in the AI user message.

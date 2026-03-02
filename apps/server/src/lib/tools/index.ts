@@ -16,3 +16,7 @@ export const toolSet = {
 };
 
 export type RobotToolSet = typeof toolSet;
+
+export function createToolSet(_sessionId?: string) {
+  return toolSet;
+}

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Camera } from "lucide-react";
-import { snapshotQuery } from "@/lib/queries/snapshot";
+import { snapshotQuery } from "@/lib/queries";
 
 export function CameraFeed() {
   const { data: tick } = useQuery(snapshotQuery);

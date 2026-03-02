@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createLogger } from "@/lib/logger";
 import { fetchFrame } from "@/services/frame";
 import { hub } from "../hub";
+import { snapshotToModelOutput } from "./snapshot-output";
 
 const CM_PER_SEC_AT_FULL = 15.0;
 
@@ -70,6 +71,15 @@ function createMotionTool(
         ok: result.ok,
         snapshot,
       };
+    },
+    toModelOutput: ({ output }) => {
+      const status = output.ok
+        ? `ok (data: ${JSON.stringify(output.data)})`
+        : `error: ${output.error}`;
+      return snapshotToModelOutput(
+        output.snapshot,
+        `${direction} complete — ${status}`
+      );
     },
   });
 }

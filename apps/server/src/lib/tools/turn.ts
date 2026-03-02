@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createLogger } from "@/lib/logger";
 import { fetchFrame } from "@/services/frame";
 import { hub } from "../hub";
+import { snapshotToModelOutput } from "./snapshot-output";
 
 const log = createLogger("tool:turn");
 
@@ -70,5 +71,11 @@ export const turnTool = tool({
       ok: result.ok,
       snapshot,
     };
+  },
+  toModelOutput: ({ output }) => {
+    const status = output.ok
+      ? `ok (data: ${JSON.stringify(output.data)})`
+      : `error: ${output.error}`;
+    return snapshotToModelOutput(output.snapshot, `turn complete — ${status}`);
   },
 });

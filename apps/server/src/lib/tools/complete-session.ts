@@ -2,6 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 import { createLogger } from "@/lib/logger";
 import { fetchFrame } from "@/services/frame";
+import { snapshotToModelOutput } from "./snapshot-output";
 
 const log = createLogger("tool:complete");
 
@@ -27,4 +28,6 @@ export const completeTool = tool({
 
     return { ok: true, summary, snapshot };
   },
+  toModelOutput: ({ output }) =>
+    snapshotToModelOutput(output.snapshot, `complete — ${output.summary}`),
 });
