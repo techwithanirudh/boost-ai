@@ -1,9 +1,16 @@
 "use client";
 
-import type { AttachmentData } from "@/components/ai-elements/attachments";
-import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
 import type { SourceDocumentUIPart } from "ai";
-
+import {
+  AtSignIcon,
+  CheckIcon,
+  FilesIcon,
+  GlobeIcon,
+  ImageIcon,
+  RulerIcon,
+} from "lucide-react";
+import { memo, useCallback, useState } from "react";
+import type { AttachmentData } from "@/components/ai-elements/attachments";
 import {
   Attachment,
   AttachmentInfo,
@@ -24,6 +31,7 @@ import {
   ModelSelectorName,
   ModelSelectorTrigger,
 } from "@/components/ai-elements/model-selector";
+import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
 import {
   PromptInput,
   PromptInputBody,
@@ -52,15 +60,6 @@ import {
   usePromptInputReferencedSources,
 } from "@/components/ai-elements/prompt-input";
 import { Button } from "@/components/ui/button";
-import {
-  AtSignIcon,
-  CheckIcon,
-  FilesIcon,
-  GlobeIcon,
-  ImageIcon,
-  RulerIcon,
-} from "lucide-react";
-import { memo, useCallback, useState } from "react";
 
 const models = [
   {
@@ -124,8 +123,8 @@ const AttachmentItem = memo(({ attachment, onRemove }: AttachmentItemProps) => {
 AttachmentItem.displayName = "AttachmentItem";
 
 interface SourceItemProps {
-  source: AttachmentData;
   onRemove: (id: string) => void;
+  source: AttachmentData;
 }
 
 const SourceItem = memo(({ source, onRemove }: SourceItemProps) => {
@@ -146,8 +145,8 @@ SourceItem.displayName = "SourceItem";
 
 interface ModelItemProps {
   m: (typeof models)[0];
-  selectedModel: string;
   onSelect: (id: string) => void;
+  selectedModel: string;
 }
 
 const ModelItem = memo(({ m, selectedModel, onSelect }: ModelItemProps) => {
@@ -173,9 +172,9 @@ const ModelItem = memo(({ m, selectedModel, onSelect }: ModelItemProps) => {
 ModelItem.displayName = "ModelItem";
 
 interface SourceCommandItemProps {
-  source: SourceDocumentUIPart;
   index: number;
   onAdd: (source: SourceDocumentUIPart) => void;
+  source: SourceDocumentUIPart;
 }
 
 const SourceCommandItem = memo(

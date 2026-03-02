@@ -2,9 +2,9 @@
 import { useChat } from "@ai-sdk/react";
 import { createFileRoute } from "@tanstack/react-router";
 import { DefaultChatTransport, generateId, type UIMessage } from "ai";
-import { Bot, ShieldAlert } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
 import {
   Conversation,
   ConversationContent,
@@ -25,167 +25,110 @@ import {
   PromptInputTextarea,
 } from "@/components/ai-elements/prompt-input";
 import { Shimmer } from "@/components/ai-elements/shimmer";
+import { CameraFeed } from "@/components/session/camera-feed";
+import { StatusPanel } from "@/components/session/status-panel";
 import { Tool } from "@/components/tool";
 import { Card } from "@/components/ui/card";
 import { asRecord, asString } from "@/lib/utils";
 
 interface ChatRecord {
   messages?: UIMessage[];
+  title?: string;
 }
 
 interface ChatResponse {
   data?: ChatRecord;
 }
 
-interface HealthResponse {
-  data?: {
-    hub?: {
-      error?: string | null;
-      ok?: boolean;
-    };
-  };
-}
+const searchSchema = z.object({
+  message: z.string().optional(),
+});
 
 export const Route = createFileRoute("/session/$id")({
+  validateSearch: searchSchema,
   loader: async ({ params }) => {
     const response = await fetch(`/api/v1/chat/${params.id}`).catch(() => null);
     if (!response?.ok) {
-      return { messages: [] as UIMessage[] };
+      return { messages: [] as UIMessage[], title: "Session" };
     }
-
     const payload = (await response.json()) as ChatResponse;
-    const data = payload.data;
     return {
-      messages: data?.messages ?? [],
+      messages: payload.data?.messages ?? [],
+      title: payload.data?.title ?? "Session",
     };
   },
   component: SessionPage,
 });
 
-function stateLabel(status: string): string {
-  if (status === "streaming" || status === "submitted") {
-    return "running";
-  }
-
-  if (status === "error") {
-    return "stopped";
-  }
-
-  return "ready";
-}
+// Stable transport defined at module level to avoid recreation on re-renders
+const transport = new DefaultChatTransport({
+  api: "/api/v1/chat",
+  prepareSendMessagesRequest: ({ id: chatId, messages: current }) => ({
+    body: { id: chatId, message: current.at(-1) },
+  }),
+  prepareReconnectToStreamRequest: ({ id: chatId }) => ({
+    api: `/api/v1/chat/${chatId}/stream`,
+  }),
+});
 
 function SessionPage() {
   const { id } = Route.useParams();
+  const { message: initialGoal } = Route.useSearch();
   const chat = Route.useLoaderData();
-  const [hubOk, setHubOk] = useState<boolean | null>(null);
-  const [hubError, setHubError] = useState<string | null>(null);
+  const hasSentInitial = useRef(false);
 
   const initialMessages = useMemo(() => chat.messages ?? [], [chat.messages]);
 
-  const { messages, sendMessage, status } = useChat({
+  const { messages, sendMessage, status, stop } = useChat({
     id,
     messages: initialMessages,
     generateId,
     resume: true,
-    transport: new DefaultChatTransport({
-      api: "/api/v1/chat",
-      prepareSendMessagesRequest: ({
-        id: chatId,
-        messages: currentMessages,
-      }) => {
-        const lastMessage = currentMessages.at(-1);
-
-        return {
-          body: {
-            id: chatId,
-            message: lastMessage,
-          },
-        };
-      },
-      prepareReconnectToStreamRequest: ({ id: chatId }) => ({
-        api: `/api/v1/chat/${chatId}/stream`,
-      }),
-    }),
+    transport,
     onError: (error) => {
       toast.error(error.message);
     },
   });
 
-  const toolEvents = useMemo(
-    () =>
-      messages.flatMap((message) =>
-        message.parts.flatMap((part, partIndex) => {
-          const payload = asRecord(part);
-          const type = asString(payload?.type);
-          if (!type?.startsWith("tool-")) {
-            return [];
-          }
+  // Auto-send the goal passed from the home page
+  useEffect(() => {
+    if (
+      initialGoal &&
+      !hasSentInitial.current &&
+      messages.length === 0 &&
+      status === "ready"
+    ) {
+      hasSentInitial.current = true;
+      sendMessage({ text: initialGoal });
+    }
+  }, [initialGoal, messages.length, status, sendMessage]);
 
-          return [
-            {
-              input: payload?.input,
-              output: payload?.output,
-              state: asString(payload?.state) ?? undefined,
-              toolCallId:
-                asString(payload?.toolCallId) ?? `${message.id}-${partIndex}`,
-              toolName: type.replace("tool-", ""),
-            },
-          ];
-        })
+  const toolCallCount = useMemo(
+    () =>
+      messages.reduce(
+        (count, message) =>
+          count +
+          message.parts.filter((p) => {
+            const type = asString(asRecord(p)?.type);
+            return type?.startsWith("tool-") ?? false;
+          }).length,
+        0
       ),
     [messages]
   );
 
-  useEffect(() => {
-    const loadHubHealth = async () => {
-      const response = await fetch("/api/v1/health").catch(() => null);
-      if (!response?.ok) {
-        setHubOk(false);
-        setHubError("health_request_failed");
-        return;
-      }
-
-      const payload = (await response.json()) as HealthResponse;
-      const hub = payload.data?.hub;
-      setHubOk(Boolean(hub?.ok));
-      setHubError(hub?.error ?? null);
-    };
-
-    loadHubHealth();
-    const interval = setInterval(loadHubHealth, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
   const isRunning = status === "streaming" || status === "submitted";
-  const hubStatusLabel = (() => {
-    if (hubOk === null) {
-      return "checking";
-    }
-
-    if (hubOk) {
-      return "online";
-    }
-
-    return "offline";
-  })();
-  const hubStatusClass = (() => {
-    if (hubOk === null) {
-      return "text-muted-foreground";
-    }
-    return hubOk ? "text-emerald-500" : "text-destructive";
-  })();
 
   const submitPrompt = ({ text }: PromptInputMessage) => {
     const trimmed = text.trim();
     if (!trimmed) {
       return;
     }
-
     sendMessage({ text: trimmed });
   };
 
   return (
-    <main className="grid h-full min-h-0 gap-3 p-3 md:grid-cols-[minmax(0,1fr)_320px]">
+    <main className="grid h-full min-h-0 gap-3 p-3 md:grid-cols-[minmax(0,1fr)_300px]">
       <section className="grid min-h-0 grid-rows-[1fr_auto] gap-3">
         <Card className="min-h-0 overflow-hidden border p-0">
           <Conversation>
@@ -232,8 +175,8 @@ function SessionPage() {
                 ))
               ) : (
                 <ConversationEmptyState
-                  description="Send your first message to start the chat."
-                  title="No messages yet"
+                  description="Send a task and the robot will start moving."
+                  title="Robot ready"
                 />
               )}
               {isRunning ? <Shimmer className="mt-3 h-12 w-full" /> : null}
@@ -244,7 +187,7 @@ function SessionPage() {
 
         <PromptInput onSubmit={submitPrompt}>
           <PromptInputBody>
-            <PromptInputTextarea placeholder="Type a message..." />
+            <PromptInputTextarea placeholder="Give the robot a task…" />
           </PromptInputBody>
           <PromptInputFooter>
             <PromptInputSubmit status={status} />
@@ -252,35 +195,18 @@ function SessionPage() {
         </PromptInput>
       </section>
 
-      <aside className="flex h-full min-h-0 flex-col gap-3">
-        <Card className="min-h-0 flex-1 border p-3">
-          <p className="mb-3 font-medium text-sm">System Status</p>
-          <dl className="space-y-2 text-sm">
-            <div className="flex items-center justify-between">
-              <dt className="flex items-center gap-2 text-muted-foreground">
-                <ShieldAlert className="size-4" />
-                Chat
-              </dt>
-              <dd className="capitalize">{stateLabel(status)}</dd>
-            </div>
-            <div className="flex items-center justify-between">
-              <dt className="flex items-center gap-2 text-muted-foreground">
-                <Bot className="size-4" />
-                Hub
-              </dt>
-              <dd className={hubStatusClass}>{hubStatusLabel}</dd>
-            </div>
-            <div className="flex items-center justify-between">
-              <dt className="text-muted-foreground">Tool Calls</dt>
-              <dd>{toolEvents.length}</dd>
-            </div>
-            {hubError ? (
-              <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-destructive text-xs">
-                {hubError}
-              </div>
-            ) : null}
-          </dl>
+      <aside className="flex min-h-0 flex-col gap-3">
+        <Card className="border p-3">
+          <p className="mb-2 font-medium text-sm">Camera</p>
+          <CameraFeed />
         </Card>
+
+        <StatusPanel
+          chatStatus={status}
+          isRunning={isRunning}
+          onStop={stop}
+          toolCallCount={toolCallCount}
+        />
       </aside>
     </main>
   );

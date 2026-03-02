@@ -74,7 +74,6 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
-
 @theme inline {
   --font-sans: "Inter Variable", sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);

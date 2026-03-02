@@ -1,7 +1,7 @@
 "use client";
 
-import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
-
+import { CheckIcon, GlobeIcon } from "lucide-react";
+import { memo, useCallback, useState } from "react";
 import {
   Attachment,
   AttachmentPreview,
@@ -21,6 +21,7 @@ import {
   ModelSelectorName,
   ModelSelectorTrigger,
 } from "@/components/ai-elements/model-selector";
+import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
 import {
   PromptInput,
   PromptInputActionAddAttachments,
@@ -36,8 +37,6 @@ import {
   PromptInputTools,
   usePromptInputAttachments,
 } from "@/components/ai-elements/prompt-input";
-import { CheckIcon, GlobeIcon } from "lucide-react";
-import { memo, useCallback, useState } from "react";
 
 const models = [
   {
@@ -108,8 +107,8 @@ AttachmentItem.displayName = "AttachmentItem";
 
 interface ModelItemProps {
   m: (typeof models)[0];
-  selectedModel: string;
   onSelect: (id: string) => void;
+  selectedModel: string;
 }
 
 const ModelItem = memo(({ m, selectedModel, onSelect }: ModelItemProps) => {

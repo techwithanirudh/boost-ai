@@ -1,6 +1,7 @@
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { generateId } from "ai";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   NewTaskForm,
   type NewTaskFormValues,
@@ -12,29 +13,23 @@ export const Route = createFileRoute("/")({
   component: HomePage,
 });
 
+async function fetchChatHistory(): Promise<ChatListItem[]> {
+  const res = await fetch("/api/v1/chat");
+  if (!res.ok) {
+    throw new Error("Failed to load history");
+  }
+  const payload = (await res.json()) as { data?: ChatListItem[] };
+  return payload.data ?? [];
+}
+
 function HomePage() {
-  const [history, setHistory] = useState<ChatListItem[]>([]);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = Route.useNavigate();
 
-  useEffect(() => {
-    const loadHistory = async () => {
-      const res = await fetch("/api/v1/chat").catch(() => null);
-      if (!res?.ok) {
-        setIsLoadingHistory(false);
-        return;
-      }
-
-      const payload = (await res.json()) as {
-        data?: ChatListItem[];
-      };
-      setHistory(payload.data ?? []);
-      setIsLoadingHistory(false);
-    };
-
-    loadHistory();
-  }, []);
+  const { data: history = [], isPending: isLoadingHistory } = useQuery({
+    queryKey: ["chats"],
+    queryFn: fetchChatHistory,
+  });
 
   const start = ({ message }: NewTaskFormValues, reset: () => void) => {
     const trimmed = message.trim();
@@ -44,11 +39,11 @@ function HomePage() {
 
     setIsSubmitting(true);
     const id = generateId();
-
     reset();
     navigate({
       to: "/session/$id",
       params: { id },
+      search: { message: trimmed },
     });
     setIsSubmitting(false);
   };
@@ -56,13 +51,13 @@ function HomePage() {
   return (
     <main className="flex h-full w-full flex-col gap-4 p-4">
       <Card className="shrink-0 p-6">
-        <h1 className="font-semibold text-2xl tracking-tight">New Chat</h1>
+        <h1 className="mb-4 font-semibold text-2xl tracking-tight">New Task</h1>
         <NewTaskForm isSubmitting={isSubmitting} onSubmit={start} />
       </Card>
 
       <Card className="min-h-0 flex-1 p-6">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-semibold text-lg">Previous Chats</h2>
+          <h2 className="font-semibold text-lg">Previous Sessions</h2>
           <p className="text-muted-foreground text-xs">
             {history.length} total
           </p>

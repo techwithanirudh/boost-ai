@@ -4,6 +4,7 @@ import {
   createUIMessageStream,
   createUIMessageStreamResponse,
   generateId,
+  hasToolCall,
   type ModelMessage,
   stepCountIs,
   streamText,
@@ -16,6 +17,7 @@ import { config, provider } from "@/lib/providers";
 import { getResumableStreamContext } from "@/lib/resume-stream";
 import { generateTitleFromUserMessage } from "@/lib/title";
 import { toolSet } from "@/lib/tools";
+import { fetchFrame } from "@/services/frame";
 
 const postBodySchema = z.object({
   id: z.string().min(1),
@@ -146,13 +148,32 @@ export async function postChat(request: Request): Promise<Response> {
         system: systemPrompt(),
         messages: await convertToModelMessages(messages),
         tools: toolSet,
-        stopWhen: stepCountIs(config.ai.maxSteps),
-        prepareStep: ({ messages: modelMessages }) => {
-          return {
-            messages: sanitizeToolImageMessages(
-              modelMessages as ModelMessage[]
-            ),
-          };
+        toolChoice: "required",
+        stopWhen: [
+          hasToolCall("complete"),
+          hasToolCall("stop"),
+          stepCountIs(config.ai.maxSteps),
+        ],
+        prepareStep: async ({ messages: modelMessages }) => {
+          const sanitized = sanitizeToolImageMessages(
+            modelMessages as ModelMessage[]
+          );
+          try {
+            const frame = await fetchFrame();
+            const cameraMessage: UserModelMessage = {
+              role: "user",
+              content: [
+                { type: "image", image: frame.dataUrl },
+                {
+                  type: "text",
+                  text: "Current camera frame. Observe carefully before deciding your next action.",
+                },
+              ],
+            };
+            return { messages: [...sanitized, cameraMessage] };
+          } catch {
+            return { messages: sanitized };
+          }
         },
       });
 
