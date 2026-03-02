@@ -1,4 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import {
   createRootRouteWithContext,
   HeadContent,
@@ -9,6 +10,7 @@ import { AppHeader } from "@/components/app-header";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { healthQuery } from "@/lib/queries/health";
 
 import "../index.css";
 
@@ -42,7 +44,22 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
   }),
 });
 
+function HubOfflineBanner() {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
+      <p className="font-semibold text-base">Hub offline</p>
+      <p className="max-w-xs text-muted-foreground text-sm">
+        The Boost hub is not reachable. Make sure the hub is powered on and
+        connected, then refresh the page.
+      </p>
+    </div>
+  );
+}
+
 function RootComponent() {
+  const { data: health, isFetched } = useQuery(healthQuery);
+  const hubOffline = isFetched && health?.hub?.ok === false;
+
   return (
     <>
       <HeadContent />
@@ -56,7 +73,7 @@ function RootComponent() {
           <div className="flex h-svh flex-col">
             <AppHeader />
             <div className="min-h-0 flex-1">
-              <Outlet />
+              {hubOffline ? <HubOfflineBanner /> : <Outlet />}
             </div>
           </div>
         </TooltipProvider>

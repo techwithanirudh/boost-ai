@@ -40,7 +40,6 @@ function HomePage() {
       params: { id },
       search: { task: trimmed },
     });
-    // Don't reset isSubmitting — navigation unmounts this component
   };
 
   return (

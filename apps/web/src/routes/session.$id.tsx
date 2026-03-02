@@ -24,7 +24,6 @@ import {
   PromptInputSubmit,
   PromptInputTextarea,
 } from "@/components/ai-elements/prompt-input";
-import { Shimmer } from "@/components/ai-elements/shimmer";
 import { CameraFeed } from "@/components/session/camera-feed";
 import { StatusPanel } from "@/components/session/status-panel";
 import { Tool } from "@/components/tool";
@@ -52,7 +51,7 @@ export const Route = createFileRoute("/session/$id")({
       throw new Error("Network error — could not reach the server");
     }
     if (response.status === 404) {
-      throw new Error("Chat not found");
+      return { messages: [], title: null };
     }
     if (!response.ok) {
       throw new Error(`Server error (${response.status})`);
@@ -66,7 +65,6 @@ export const Route = createFileRoute("/session/$id")({
   component: SessionPage,
 });
 
-// Stable transport at module level — never recreated on re-renders
 const transport = new DefaultChatTransport({
   api: "/api/v1/chat",
   prepareSendMessagesRequest: ({ id: chatId, messages: current }) => ({
@@ -94,7 +92,6 @@ function SessionPage() {
     },
   });
 
-  // Auto-send the task passed via URL search param on first load
   useEffect(() => {
     if (
       initialTask &&
@@ -175,7 +172,13 @@ function SessionPage() {
                   title="Robot ready"
                 />
               )}
-              {isRunning ? <Shimmer className="mt-3 h-12 w-full" /> : null}
+              {isRunning ? (
+                <div className="mt-3 flex gap-1">
+                  <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/40 [animation-delay:-0.3s]" />
+                  <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/40 [animation-delay:-0.15s]" />
+                  <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/40" />
+                </div>
+              ) : null}
             </ConversationContent>
             <ConversationScrollButton />
           </Conversation>
