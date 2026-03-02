@@ -12,5 +12,3 @@ export const provider: Provider = customProvider({
     "title-model": openai.languageModel("gpt-5-mini"),
   },
 });
-
-export { config } from "@boost/config";

@@ -1,7 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { Hono } from "hono";
-
-const SNAPSHOT_PATH = "/tmp/snapshot.jpg";
+import { SNAPSHOT_PATH } from "@/lib/constants";
 
 export const snapshot = new Hono();
 

@@ -1,3 +1,4 @@
+import { config } from "@boost/config";
 import { readChat, saveChat } from "@boost/db/queries/chats";
 import {
   convertToModelMessages,
@@ -13,7 +14,7 @@ import {
 import { z } from "zod";
 import { createLogger } from "@/lib/logger";
 import { systemPrompt } from "@/lib/prompts/system";
-import { config, provider } from "@/lib/providers";
+import { provider } from "@/lib/providers";
 import { getResumableStreamContext } from "@/lib/resume-stream";
 import { generateTitleFromUserMessage } from "@/lib/title";
 import { toolSet } from "@/lib/tools";

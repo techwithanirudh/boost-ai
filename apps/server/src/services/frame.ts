@@ -1,6 +1,5 @@
 import { readFile } from "node:fs/promises";
-
-const SNAPSHOT_PATH = "/tmp/snapshot.jpg";
+import { SNAPSHOT_PATH } from "@/lib/constants";
 
 export interface Frame {
   buffer: Buffer;

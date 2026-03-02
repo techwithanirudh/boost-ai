@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import type { ChatStatus } from "ai";
 import { Activity, Bot, Square } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,7 +19,7 @@ function chatStatusVariant(
   return "secondary";
 }
 
-function chatStatusLabel(status: string): string {
+function chatStatusLabel(status: ChatStatus): string {
   if (status === "streaming" || status === "submitted") {
     return "running";
   }
@@ -29,7 +30,7 @@ function chatStatusLabel(status: string): string {
 }
 
 interface StatusPanelProps {
-  chatStatus: string;
+  chatStatus: ChatStatus;
   isRunning: boolean;
   onStop: () => void;
 }

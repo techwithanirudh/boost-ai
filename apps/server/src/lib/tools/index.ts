@@ -14,9 +14,3 @@ export const toolSet = {
   stop: stopTool,
   turn: turnTool,
 };
-
-export type RobotToolSet = typeof toolSet;
-
-export function createToolSet(_sessionId?: string) {
-  return toolSet;
-}
