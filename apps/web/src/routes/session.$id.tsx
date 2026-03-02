@@ -1,7 +1,7 @@
 // biome-ignore lint/style/useFilenamingConvention: TanStack file routes require `$param` segments.
 import { useChat } from "@ai-sdk/react";
 import { createFileRoute } from "@tanstack/react-router";
-import { DefaultChatTransport, type UIMessage } from "ai";
+import { DefaultChatTransport, generateId, type UIMessage } from "ai";
 import { Bot, ShieldAlert } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -19,12 +19,10 @@ import {
 import {
   PromptInput,
   PromptInputBody,
-  PromptInputButton,
   PromptInputFooter,
   type PromptInputMessage,
   PromptInputSubmit,
   PromptInputTextarea,
-  PromptInputTools,
 } from "@/components/ai-elements/prompt-input";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Tool } from "@/components/tool";
@@ -84,9 +82,10 @@ function SessionPage() {
 
   const initialMessages = useMemo(() => chat.messages ?? [], [chat.messages]);
 
-  const { messages, sendMessage, status, stop } = useChat({
+  const { messages, sendMessage, status } = useChat({
     id,
     messages: initialMessages,
+    generateId,
     resume: true,
     transport: new DefaultChatTransport({
       api: "/api/v1/chat",
@@ -248,15 +247,6 @@ function SessionPage() {
             <PromptInputTextarea placeholder="Type a message..." />
           </PromptInputBody>
           <PromptInputFooter>
-            <PromptInputTools>
-              <PromptInputButton
-                disabled={!isRunning}
-                onClick={stop}
-                variant="destructive"
-              >
-                Stop
-              </PromptInputButton>
-            </PromptInputTools>
             <PromptInputSubmit status={status} />
           </PromptInputFooter>
         </PromptInput>

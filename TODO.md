@@ -5,3 +5,4 @@
 Add depth map as a second image part in the AI user message.
 - Sidecar: https://github.com/apple/ml-depth-pro
 - In `apps/server/src/services/orchestrator.ts` add `{ type: "image", image: depthMapUrl }` alongside the RGB frame already passed to the model.
+- Use tanstack query for calling APIs, and use heyapi for hub logic... re-add all shadcn components
