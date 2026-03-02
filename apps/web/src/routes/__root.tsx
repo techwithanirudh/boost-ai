@@ -23,7 +23,7 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
   head: () => ({
     meta: [
       {
-        title: "Boost Control",
+        title: "Boost AI",
       },
       {
         name: "description",
