@@ -12,6 +12,7 @@ import {
   type UserModelMessage,
 } from "ai";
 import { z } from "zod";
+import { createLogger } from "@/lib/logger";
 import { systemPrompt } from "@/lib/prompts/system";
 import { config, provider } from "@/lib/providers";
 import { getResumableStreamContext } from "@/lib/resume-stream";
@@ -19,10 +20,12 @@ import { generateTitleFromUserMessage } from "@/lib/title";
 import { toolSet } from "@/lib/tools";
 import { fetchFrame } from "@/services/frame";
 
+const log = createLogger("chat");
+
 const postBodySchema = z.object({
   id: z.string().min(1),
-  message: z.any().optional(),
-  messages: z.array(z.any()).optional(),
+  message: z.unknown().optional(),
+  messages: z.array(z.unknown()).optional(),
 });
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -55,6 +58,7 @@ function sanitizeToolImageMessages(messages: ModelMessage[]): ModelMessage[] {
       role: "tool";
     };
     const extractedImages: string[] = [];
+
     for (const contentPart of mutable.content) {
       const part = asRecord(contentPart);
       if (!part) {
@@ -62,40 +66,34 @@ function sanitizeToolImageMessages(messages: ModelMessage[]): ModelMessage[] {
       }
 
       const output = asRecord(part?.output);
-      const snapshot = asString(output?.snapshot);
-
-      if (snapshot?.startsWith("data:image/")) {
-        extractedImages.push(snapshot);
-        part.output = { type: "text", value: "[Snapshot attached as image]" };
+      if (!output) {
         continue;
       }
 
-      const outputType = asString(output?.type);
-      const outputValue = output?.value;
-      if (outputType !== "content" || !Array.isArray(outputValue)) {
+      // AI SDK v6 wraps tool JSON output as { type: "json", value: { ...raw } }.
+      // The snapshot field lives in the `value` wrapper. Fall back to top-level
+      // for any legacy / direct formats.
+      const rawValue = asRecord(output.value) ?? output;
+      const snapshot = asString(rawValue?.snapshot);
+
+      if (!snapshot?.startsWith("data:image/")) {
         continue;
       }
 
-      const medias = outputValue.map((entry) => asRecord(entry));
-      const mediaImages = medias
-        .filter((media) => asString(media?.type) === "media")
-        .map((media) => asString(media?.data))
-        .filter((data): data is string => Boolean(data));
+      extractedImages.push(snapshot);
 
-      if (mediaImages.length === 0) {
-        continue;
-      }
-
-      extractedImages.push(...mediaImages);
-      part.output = { type: "text", value: "[Image sent]" };
+      part.output = {
+        type: "text",
+        value: "[Camera snapshot attached as image above]",
+      };
     }
 
     sanitized.push(mutable as unknown as ModelMessage);
 
-    for (const image of extractedImages) {
+    for (const snapshot of extractedImages) {
       const imageMessage: UserModelMessage = {
         role: "user",
-        content: [{ type: "image", image }],
+        content: [{ type: "image", image: snapshot }],
       };
       sanitized.push(imageMessage);
     }
@@ -117,7 +115,17 @@ export async function postChat(request: Request): Promise<Response> {
 
   const { id, message, messages: requestedMessages } = parsed.data;
 
-  const chat = await readChat(id);
+  let chat: Awaited<ReturnType<typeof readChat>>;
+  try {
+    chat = await readChat(id);
+  } catch (err) {
+    log.error({ err, id }, "Failed to read chat");
+    return Response.json(
+      { ok: false, data: null, error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+
   const persisted = (chat.messages ?? []) as UIMessage[];
   const incomingMessage = message as UIMessage | undefined;
   let messages = persisted;
@@ -130,15 +138,26 @@ export async function postChat(request: Request): Promise<Response> {
   const shouldGenerateTitle =
     chat.title === "New chat" && incomingMessage?.role === "user";
   const titlePromise = shouldGenerateTitle
-    ? generateTitleFromUserMessage(incomingMessage)
+    ? generateTitleFromUserMessage(incomingMessage).catch((err) => {
+        log.warn({ err, id }, "Title generation failed");
+        return null;
+      })
     : null;
 
-  await saveChat({
-    id,
-    activeStreamId: null,
-    messages,
-    status: "running",
-  });
+  try {
+    await saveChat({
+      id,
+      activeStreamId: null,
+      messages,
+      status: "running",
+    });
+  } catch (err) {
+    log.error({ err, id }, "Failed to save chat before streaming");
+    return Response.json(
+      { ok: false, data: null, error: "Internal server error" },
+      { status: 500 }
+    );
+  }
 
   const stream = createUIMessageStream({
     originalMessages: requestedMessages ? messages : undefined,
@@ -146,7 +165,7 @@ export async function postChat(request: Request): Promise<Response> {
       const result = streamText({
         model: provider.languageModel("chat-model"),
         system: systemPrompt(),
-        messages: await convertToModelMessages(messages),
+        messages: await convertToModelMessages(messages, { tools: toolSet }),
         tools: toolSet,
         toolChoice: "required",
         stopWhen: [
@@ -163,7 +182,7 @@ export async function postChat(request: Request): Promise<Response> {
             const cameraMessage: UserModelMessage = {
               role: "user",
               content: [
-                { type: "image", image: frame.dataUrl },
+                { type: "image", image: frame.buffer },
                 {
                   type: "text",
                   text: "Current camera frame. Observe carefully before deciding your next action.",
@@ -180,20 +199,33 @@ export async function postChat(request: Request): Promise<Response> {
       writer.merge(result.toUIMessageStream({ sendReasoning: true }));
       if (titlePromise) {
         const title = await titlePromise;
-        await saveChat({ id, title });
-        writer.write({ type: "data-chat-title", data: title });
+        if (title) {
+          await saveChat({ id, title });
+          writer.write({ type: "data-chat-title", data: title });
+        }
       }
     },
     generateId,
     onFinish: async ({ messages: finishedMessages }) => {
-      await saveChat({
-        id,
-        activeStreamId: null,
-        messages: finishedMessages,
-        status: "completed",
-      });
+      try {
+        await saveChat({
+          id,
+          activeStreamId: null,
+          messages: finishedMessages,
+          status: "completed",
+        });
+      } catch (err) {
+        log.error({ err, id }, "Failed to save chat on finish");
+      }
     },
-    onError: () => "Stream failed",
+    onError: (err) => {
+      log.error({ err, id }, "Stream error");
+      saveChat({ id, activeStreamId: null, status: "stopped" }).catch(
+        (saveErr) =>
+          log.error({ err: saveErr, id }, "Failed to save chat on error")
+      );
+      return "Stream failed";
+    },
   });
 
   return createUIMessageStreamResponse({
@@ -205,8 +237,12 @@ export async function postChat(request: Request): Promise<Response> {
       }
 
       const streamId = generateId();
-      await saveChat({ id, activeStreamId: streamId });
-      await streamContext.createNewResumableStream(streamId, () => sseStream);
+      try {
+        await saveChat({ id, activeStreamId: streamId });
+        await streamContext.createNewResumableStream(streamId, () => sseStream);
+      } catch (err) {
+        log.error({ err, id, streamId }, "Failed to register resumable stream");
+      }
     },
   });
 }

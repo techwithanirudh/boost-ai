@@ -2,7 +2,7 @@
 import { useChat } from "@ai-sdk/react";
 import { createFileRoute } from "@tanstack/react-router";
 import { DefaultChatTransport, generateId, type UIMessage } from "ai";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 import {
@@ -49,18 +49,18 @@ export const Route = createFileRoute("/session/$id")({
   loader: async ({ params }) => {
     const response = await fetch(`/api/v1/chat/${params.id}`).catch(() => null);
     if (!response?.ok) {
-      return { messages: [] as UIMessage[], title: "Session" };
+      return { messages: [] as UIMessage[], title: null };
     }
     const payload = (await response.json()) as ChatResponse;
     return {
       messages: payload.data?.messages ?? [],
-      title: payload.data?.title ?? "Session",
+      title: payload.data?.title ?? null,
     };
   },
   component: SessionPage,
 });
 
-// Stable transport defined at module level to avoid recreation on re-renders
+// Stable transport at module level — never recreated on re-renders
 const transport = new DefaultChatTransport({
   api: "/api/v1/chat",
   prepareSendMessagesRequest: ({ id: chatId, messages: current }) => ({
@@ -73,11 +73,9 @@ const transport = new DefaultChatTransport({
 
 function SessionPage() {
   const { id } = Route.useParams();
-  const { task: initialGoal } = Route.useSearch();
-  const chat = Route.useLoaderData();
+  const { task: initialTask } = Route.useSearch();
+  const { messages: initialMessages, title } = Route.useLoaderData();
   const hasSentInitial = useRef(false);
-
-  const initialMessages = useMemo(() => chat.messages ?? [], [chat.messages]);
 
   const { messages, sendMessage, status, stop } = useChat({
     id,
@@ -90,20 +88,21 @@ function SessionPage() {
     },
   });
 
-  // Auto-send the goal passed from the home page
+  // Auto-send the task passed via URL search param on first load
   useEffect(() => {
     if (
-      initialGoal &&
+      initialTask &&
       !hasSentInitial.current &&
       messages.length === 0 &&
       status === "ready"
     ) {
       hasSentInitial.current = true;
-      sendMessage({ text: initialGoal });
+      sendMessage({ text: initialTask });
     }
-  }, [initialGoal, messages.length, status, sendMessage]);
+  }, [initialTask, messages.length, status, sendMessage]);
 
   const isRunning = status === "streaming" || status === "submitted";
+  const displayTitle = title && title !== "New chat" ? title : null;
 
   const submitPrompt = ({ text }: PromptInputMessage) => {
     const trimmed = text.trim();
@@ -113,15 +112,13 @@ function SessionPage() {
     sendMessage({ text: trimmed });
   };
 
-  const title = chat.title && chat.title !== "New chat" ? chat.title : null;
-
   return (
-    <main className="grid h-full min-h-0 gap-3 p-3 md:grid-cols-[minmax(0,1fr)_300px]">
+    <main className="mx-auto grid h-full min-h-0 w-full max-w-5xl gap-3 p-3 md:grid-cols-[minmax(0,1fr)_280px]">
       <section className="grid min-h-0 grid-rows-[1fr_auto] gap-3">
         <Card className="min-h-0 overflow-hidden border p-0">
-          {title ? (
+          {displayTitle ? (
             <div className="border-b px-3 py-2">
-              <p className="truncate font-medium text-sm">{title}</p>
+              <p className="truncate font-medium text-sm">{displayTitle}</p>
             </div>
           ) : null}
           <Conversation>
