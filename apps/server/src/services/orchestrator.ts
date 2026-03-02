@@ -15,7 +15,8 @@ interface RunSessionResult {
 }
 
 interface ToolCallPart {
-  args: Record<string, unknown>;
+  args?: Record<string, unknown>;
+  input?: Record<string, unknown>;
   toolName: string;
   type: "tool-call";
 }
@@ -29,10 +30,11 @@ function isToolCallPart(part: unknown): part is ToolCallPart {
 }
 
 function formatMove(call: ToolCallPart): string | null {
-  const val = call.args.value as number | undefined;
   if (call.toolName === "stop") {
     return "stop";
   }
+  const params = call.args ?? call.input;
+  const val = params?.value as number | undefined;
   if (call.toolName === "turn") {
     return `turn ${val}°`;
   }
@@ -117,9 +119,7 @@ export async function runSession(
     toolChoice: "required",
     providerOptions: {
       openai: {
-        parallelToolCalls: true,
-        reasoningEffort: "minimal",
-        textVerbosity: "low",
+        parallelToolCalls: true
       },
     },
     tools,

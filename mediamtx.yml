@@ -24,7 +24,7 @@ pathDefaults:
   runOnReady: >-
     ffmpeg -hide_banner -loglevel quiet
     -rtsp_transport tcp -i rtsp://127.0.0.1:8554/$MTX_PATH
-    -vf fps=1 -update 1 -y /tmp/snapshot.jpg
+    -vf transpose=clock,fps=1 -update 1 -y /tmp/snapshot.jpg
   runOnReadyRestart: yes
 
 paths:
