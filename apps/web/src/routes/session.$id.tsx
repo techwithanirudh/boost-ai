@@ -80,6 +80,7 @@ function SessionPage() {
   const { task: initialTask } = Route.useSearch();
   const { messages: initialMessages, title } = Route.useLoaderData();
   const hasSentInitial = useRef(false);
+  const pendingTask = useRef(initialTask ?? null);
 
   const { messages, sendMessage, status, stop } = useChat({
     id,
@@ -93,16 +94,13 @@ function SessionPage() {
   });
 
   useEffect(() => {
-    if (
-      initialTask &&
-      !hasSentInitial.current &&
-      messages.length === 0 &&
-      status === "ready"
-    ) {
+    if (status === "ready" && pendingTask.current && !hasSentInitial.current) {
       hasSentInitial.current = true;
-      sendMessage({ text: initialTask });
+      const task = pendingTask.current;
+      pendingTask.current = null;
+      sendMessage({ text: task });
     }
-  }, [initialTask, messages.length, status, sendMessage]);
+  }, [status, sendMessage]);
 
   const isRunning = status === "streaming" || status === "submitted";
   const displayTitle = title && title !== "New chat" ? title : null;

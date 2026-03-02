@@ -10,12 +10,13 @@
     "start": "bun run --env-file ../../.env dist/index.mjs"
   },
   "dependencies": {
-    "@ai-sdk/google": "^3.0.34",
+    "@ai-sdk/openai": "^3.0.37",
     "@boost/db": "workspace:*",
     "@boost/env": "workspace:*",
     "@boost/validators": "workspace:*",
     "ai": "^6.0.105",
     "ai-retry": "^1.2.0",
+    "ai-sdk-openai-websocket-fetch": "^1.0.0",
     "drizzle-orm": "^0.45.1",
     "hono": "^4.8.2",
     "ioredis": "^5.10.0",

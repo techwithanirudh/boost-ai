@@ -6,19 +6,6 @@ import { chats } from "../schema";
 export type ChatRow = typeof chats.$inferSelect;
 export type ChatStatus = "running" | "stopped" | "completed";
 
-async function createChat(id: string): Promise<ChatRow> {
-  const created = await db
-    .insert(chats)
-    .values({ id, messages: [], title: "New chat" })
-    .returning();
-
-  if (!created[0]) {
-    throw new Error("failed_to_create_chat");
-  }
-
-  return created[0];
-}
-
 export async function listChats(limit = 50): Promise<ChatRow[]> {
   const rows = await db
     .select()
@@ -40,13 +27,23 @@ export async function findChat(id: string): Promise<ChatRow | null> {
   return existing[0] ?? null;
 }
 
-/** Reads a chat, auto-creating it if it doesn't exist yet. */
 export async function readChat(id: string): Promise<ChatRow> {
+  const rows = await db
+    .insert(chats)
+    .values({ id, messages: [], title: "New chat" })
+    .onConflictDoNothing()
+    .returning();
+
+  if (rows[0]) {
+    return rows[0];
+  }
+
   const existing = await findChat(id);
   if (existing) {
     return existing;
   }
-  return createChat(id);
+
+  throw new Error("failed_to_read_or_create_chat");
 }
 
 export async function saveChat(params: {
