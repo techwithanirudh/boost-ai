@@ -4,7 +4,6 @@ import os
 import queue
 import threading
 import time
-import types
 from typing import Any
 
 from pylgbst import get_connection_bleak
@@ -31,12 +30,8 @@ def _patch_hub_send(hub: MoveHub) -> None:
     replace the method on the *instance* so the rest of the library is untouched.
     """
 
-    original_send = hub.send
-
     def send_with_timeout(msg: Any) -> Any:  # noqa: ANN401
-        import logging as _logging
-
-        log = _logging.getLogger("pylgbst.hub")
+        log = logging.getLogger("pylgbst.hub")
         log.debug("Send message (patched): %r", msg)
         msgbytes = msg.bytes()
         if msg.needs_reply:
@@ -51,6 +46,8 @@ def _patch_hub_send(hub: MoveHub) -> None:
             try:
                 resp = hub._sync_replies.get(timeout=_SEND_TIMEOUT_S)  # noqa: SLF001
             except queue.Empty:
+                # Timed out — clear stale sync state under the lock so _notify()
+                # doesn't try to put() into an already-drained queue later.
                 with hub._sync_lock:  # noqa: SLF001
                     hub._sync_request = None  # noqa: SLF001
                 raise TimeoutError(f"No reply from hub within {_SEND_TIMEOUT_S}s for {msg!r}")
@@ -62,7 +59,7 @@ def _patch_hub_send(hub: MoveHub) -> None:
             hub.connection.write(hub.HUB_HARDWARE_HANDLE, msgbytes)
             return None
 
-    hub.send = types.MethodType(send_with_timeout, hub)  # type: ignore[method-assign]
+    hub.send = send_with_timeout  # type: ignore[method-assign]
 
 
 def _clear_sync_state(hub: MoveHub) -> None:
