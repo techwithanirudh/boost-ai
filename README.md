@@ -111,6 +111,7 @@ Services and ports:
 In **Larix Broadcaster** on your iPhone:
 
 - **Connection URL**: `rtmp://<pi-ip>:1935/live/stream`
+- **Zoom**: set to **0.5x** (ultra-wide) for the widest field of view
 - Get your Pi Wi-Fi IP: `ip addr show wlan0`
 
 MediaMTX runs an ffmpeg process that writes `/tmp/snapshot.jpg` at 1 fps. The server reads that file each AI step (no per-step ffmpeg overhead). The web UI polls `/v1/snapshot` every 2 s to display it.
