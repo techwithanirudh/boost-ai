@@ -1,6 +1,7 @@
 import logging
 import math
 import os
+import threading
 import time
 from typing import Any
 
@@ -14,7 +15,6 @@ logger = logging.getLogger(__name__)
 
 _MOTOR_DEG_PER_CM = 20.5  # encoder degrees per cm of linear travel (56 mm wheel)
 _WHEEL_TRACK_CM = 11.0  # distance between wheel contact points (centre-to-centre)
-_EXTERNAL_HOLD_TARGET_DEG = -1
 _BATTERY_MAX_VOLTS = 9.6  # 6×AA alkaline full charge (~1.6 V/cell)
 
 
@@ -30,6 +30,8 @@ class HubService:
         self._x: float = 0.0  # metres, positive = forward from start
         self._y: float = 0.0  # metres, positive = left from start
         self._heading: float = 0.0  # degrees, 0 = forward, +90 = left, -90 = right
+        # Serialise motor commands to avoid pylgbst "Pending request" deadlock
+        self._execute_lock = threading.Lock()
 
     def connect(self) -> None:
         """Blocking BLE connect with retry, runs in a thread."""
@@ -54,16 +56,6 @@ class HubService:
                 self._hub = hub
                 self.connected = True
                 self._attach_distance_sensor()
-                try:
-                    hub.motor_external.goto_position(
-                        -1,
-                        speed=1.0,
-                        end_state=hub.motor_external.END_STATE_HOLD,
-                        wait_complete=False,
-                    )
-                    logger.info("External motor holding at %d°", _EXTERNAL_HOLD_TARGET_DEG)
-                except Exception as exc:
-                    logger.warning("External motor initialization failed: %s", exc)
                 logger.info("Connected to LEGO Boost hub %s", label)
                 return
             except Exception as exc:
@@ -106,11 +98,19 @@ class HubService:
         if not self.connected or self._hub is None:
             return self._err("hub_not_connected")
 
+        with self._execute_lock:
+            return self._execute_inner(payload)
+
+    def _execute_inner(self, payload: ExecuteMotionCommand) -> dict[str, Any]:
+        """Run a single motor command.  Called while _execute_lock is held."""
         hub = self._hub
+        if hub is None:
+            return self._err("hub_not_connected")
+
         action = payload.action
         speed = self._normalized_speed(payload.speed)
 
-        try:
+        def _run() -> None:
             if action == "stop":
                 hub.motor_AB.stop()
 
@@ -140,7 +140,6 @@ class HubService:
                     motor_deg,
                     speed,
                 )
-
                 hub.motor_AB.angled(
                     motor_deg,
                     direction * speed,
@@ -150,8 +149,26 @@ class HubService:
                 self._accumulate_turn(deg)
 
             else:
-                return self._err(f"unknown_action: {action}")
+                raise ValueError(f"unknown_action: {action}")
 
+        try:
+            _run()
+        except AssertionError as exc:
+            # pylgbst "Pending request" deadlock — clear stale state and retry once
+            logger.warning(
+                "pylgbst pending-request deadlock detected (%s) — clearing and retrying", exc
+            )
+            try:
+                hub._sync_request = None  # noqa: SLF001
+            except Exception:
+                pass
+            try:
+                _run()
+            except Exception as retry_exc:
+                logger.error("Motor command failed after retry: %s", retry_exc)
+                return self._err(str(retry_exc))
+        except ValueError as exc:
+            return self._err(str(exc))
         except Exception as exc:
             logger.error("Motor command failed: %s", exc)
             return self._err(str(exc))
