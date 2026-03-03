@@ -13,6 +13,7 @@ healthRouter.get("/", async (c) => {
       hub: {
         ...health,
         battery: state.data?.battery ?? null,
+        distance: state.data?.distance ?? null,
       },
     },
     error: null,

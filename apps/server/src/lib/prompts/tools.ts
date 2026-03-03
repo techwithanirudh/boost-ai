@@ -24,12 +24,12 @@ export const toolsPrompt = `\
 
 <tool>
   <name>turn</name>
-  <description>Rotate the robot in place.</description>
+  <description>Curve the snake by deflecting its head and crawling forward simultaneously.</description>
   <when>
     Path is blocked and a turn will reveal a better route, or a course correction is needed.
-    After backing out of a stuck situation, turn 30-45° before retrying forward.
-    For scanning and visual search, default to 5-15° turns at low speed.
-    If uncertain, do repeated low-speed rescans.
+    Value is duration in seconds (negative = left, positive = right): 0.5s = slight curve, 1.5s = moderate turn, 3.0s = sharp turn.
+    After backing out of a stuck situation, use 1.0–1.5s turn before retrying forward.
+    For scanning and visual search, use short 0.5s turns.
   </when>
 </tool>
 

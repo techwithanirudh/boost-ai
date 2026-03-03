@@ -2,7 +2,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-ActionType = Literal["forward_cm", "backward_cm", "turn_deg", "stop"]
+ActionType = Literal["forward_cm", "backward_cm", "turn_deg", "stop", "strike"]
 
 
 class ExecuteMotionCommand(BaseModel):

@@ -4,38 +4,44 @@ import { createLogger } from "@/lib/logger";
 import { hub } from "../hub";
 import { captureSnapshot, snapshotToModelOutput } from "./snapshot-output";
 
-const log = createLogger("tool:turn");
+const log = createLogger("tool:strike");
 
-export const turnTool = tool({
+export const strikeTool = tool({
   description:
-    "Curve the snake by deflecting its head and crawling forward simultaneously. Positive values curve right, negative values curve left. Value is duration in seconds (0.2–3.0). Longer = more total turn.",
+    "Open the R3PTAR jaw (strike action) for a specified duration, then snap it shut. Use this to strike at a target or perform a bite animation.",
   inputSchema: z.object({
     value: z
       .number()
-      .min(-3.0)
-      .max(3.0)
+      .min(0.1)
+      .max(5.0)
+      .default(0.5)
       .describe(
-        "Curve duration in seconds. Negative = left, positive = right. Range: -3.0 to +3.0."
+        "How long to hold the jaw open, in seconds (0.1-5.0). Default 0.5."
       ),
+    speed: z
+      .number()
+      .min(0)
+      .max(1)
+      .default(0.6)
+      .describe("Motor speed for the jaw open/close (0.0-1.0). Default 0.6."),
     text: z
       .string()
       .min(1)
       .max(500)
       .describe("Brief rationale for this decision (shown in logs)."),
   }),
-  execute: async ({ value, text }) => {
-    const dir = value >= 0 ? "right" : "left";
-    log.info({ value, text }, `turn ${Math.abs(value)}s ${dir}`);
+  execute: async ({ value, speed, text }) => {
+    log.info({ value, speed, text }, `strike — jaw open for ${value}s`);
 
     const result = await hub.executeAction({
-      action: "turn_deg",
+      action: "strike",
       value,
-      speed: 0.5,
+      speed,
       text,
     });
 
     if (!result.ok) {
-      log.error({ error: result.error }, "turn failed");
+      log.error({ error: result.error }, "strike failed");
     }
 
     const snapshot = await captureSnapshot();
@@ -45,6 +51,9 @@ export const turnTool = tool({
     const status = output.ok
       ? `ok (data: ${JSON.stringify(output.data)})`
       : `error: ${output.error}`;
-    return snapshotToModelOutput(output.snapshot, `turn complete — ${status}`);
+    return snapshotToModelOutput(
+      output.snapshot,
+      `strike complete — ${status}`
+    );
   },
 });

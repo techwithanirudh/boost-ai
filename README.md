@@ -80,7 +80,7 @@ Fill in `.env`:
 |---|---|
 | `DATABASE_URL` | Neon/Postgres connection string |
 | `OPENAI_API_KEY` | OpenAI API key |
-| `EV3_MAC` | Bluetooth MAC of your EV3 brick (format `00:16:53:XX:XX:XX`) |
+| `HUB_MAC` | Bluetooth MAC of your EV3 brick (format `00:16:53:XX:XX:XX`) |
 | `VITE_API_URL` | Server URL reachable from your browser (e.g. `http://192.168.0.123:3000`) |
 | `CORS_ORIGIN` | Browser origin (e.g. `http://192.168.0.123:3001`) |
 | `HF_API_TOKEN` | HuggingFace token for depth estimation (optional) |

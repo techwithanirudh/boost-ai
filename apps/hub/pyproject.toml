@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "boost-hub"
+name = "hub"
 version = "0.1.0"
 description = "LEGO Boost BLE control plane."
 authors = ["Anirudh Sriram <techwithanirudh@gmail.com>"]

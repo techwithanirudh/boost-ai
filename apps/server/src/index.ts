@@ -19,4 +19,7 @@ app.route("/v1/health", health);
 app.route("/v1/chat", chat);
 app.route("/v1/snapshot", snapshot);
 
-export default app;
+export default {
+  fetch: app.fetch,
+  idleTimeout: 120, // seconds — long enough for multi-step robot sessions
+};

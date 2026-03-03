@@ -11,13 +11,15 @@ from .safety import Watchdog
 
 logger = logging.getLogger(__name__)
 
-_PORT_DRIVE  = ev3.PORT_B
-_PORT_STEER  = ev3.PORT_A
+_PORT_DRIVE = ev3.PORT_B
+_PORT_STEER = ev3.PORT_A
 _PORT_STRIKE = ev3.PORT_D
-_PORT_IR     = ev3.PORT_4
+_PORT_IR = ev3.PORT_4
 
 _DRIVE_DEG_PER_CM: float = 36.0
-_STEER_DEG_PER_HEADING_DEG: float = 3.0
+
+_TURN_STEER_SPEED: int = 75
+_TURN_DRIVE_SPEED: int = 60
 
 _CONNECT_RETRY_S: float = 5.0
 
@@ -30,7 +32,7 @@ class HubService:
         self._steer: ev3.Motor | None = None
         self._strike: ev3.Motor | None = None
         self._ir: ev3.Infrared | None = None
-        self._mac: str | None = os.getenv("EV3_MAC") or os.getenv("HUB_MAC")
+        self._mac: str | None = os.getenv("HUB_MAC")
         self._stop_flag = False
         self.watchdog = Watchdog(timeout_s=5.0)
         self._execute_lock = threading.Lock()
@@ -43,15 +45,16 @@ class HubService:
             logger.info("Connecting to EV3 %s (attempt %d)…", label, attempt)
             try:
                 brick = ev3.EV3(protocol=ev3.BLUETOOTH, host=self._mac)
-                self._brick  = brick
-                self._drive  = ev3.Motor(_PORT_DRIVE,  ev3_obj=brick)
-                self._steer  = ev3.Motor(_PORT_STEER,  ev3_obj=brick)
+                self._brick = brick
+                self._drive = ev3.Motor(_PORT_DRIVE, ev3_obj=brick)
+                self._steer = ev3.Motor(_PORT_STEER, ev3_obj=brick)
                 self._strike = ev3.Motor(_PORT_STRIKE, ev3_obj=brick)
                 try:
                     self._ir = ev3.Infrared(_PORT_IR, ev3_obj=brick)
                 except Exception as ir_exc:
                     logger.warning("IR sensor not available at PORT_4: %s", ir_exc)
                     self._ir = None
+                self._strike.move_for(1.0, speed=30, direction=-1, brake=True).start(thread=False)
                 self.connected = True
                 logger.info("Connected to EV3 %s", label)
                 return
@@ -82,7 +85,7 @@ class HubService:
                 pass
         if self._brick is not None:
             try:
-                battery = float(self._brick.battery.voltage)
+                battery = float(self._brick.battery.percentage)
             except Exception:
                 pass
         return {"connected": self.connected, "distance": distance, "battery": battery}
@@ -94,13 +97,14 @@ class HubService:
             return self._execute_inner(payload)
 
     def _execute_inner(self, payload: ExecuteMotionCommand) -> dict[str, Any]:
-        action    = payload.action
+        action = payload.action
         speed_pct = max(5, min(100, int(round(payload.speed * 100))))
 
         try:
             if action == "stop":
                 self._drive.stop()
                 self._steer.stop()
+                self._strike.stop(brake=True)
                 logger.info("stop")
 
             elif action == "forward_cm":
@@ -116,10 +120,33 @@ class HubService:
                 self._drive.move_by(-degrees, speed=speed_pct, brake=True).start(thread=False)
 
             elif action == "turn_deg":
-                deg = max(-90.0, min(90.0, payload.value))
-                motor_deg = int(round(deg * _STEER_DEG_PER_HEADING_DEG))
-                logger.info("turn %.1f° → %d motor° @ %d%%", deg, motor_deg, speed_pct)
-                self._steer.move_by(motor_deg, speed=speed_pct, brake=True).start(thread=False)
+                duration_s = max(0.2, min(3.0, abs(payload.value)))
+                steer_dir = 1 if payload.value >= 0 else -1
+                logger.info(
+                    "turn %s for %.2f s (steer@%d%% drive@%d%%)",
+                    "right" if steer_dir == 1 else "left",
+                    duration_s,
+                    _TURN_STEER_SPEED,
+                    _TURN_DRIVE_SPEED,
+                )
+                self._steer.move_for(
+                    duration_s, speed=_TURN_STEER_SPEED, direction=steer_dir, brake=False
+                ).start(thread=True)
+                self._drive.move_for(
+                    duration_s, speed=_TURN_DRIVE_SPEED, direction=1, brake=True
+                ).start(thread=False)
+
+            elif action == "strike":
+                duration_s = max(0.1, min(5.0, payload.value))
+                logger.info("strike — open jaw for %.2f s @ %d%%", duration_s, speed_pct)
+                self._strike.move_for(0.4, speed=speed_pct, direction=1, brake=False).start(
+                    thread=False
+                )
+                time.sleep(duration_s)
+                close_speed = min(100, speed_pct * 2)
+                self._strike.move_for(1.0, speed=close_speed, direction=-1, brake=True).start(
+                    thread=False
+                )
 
             else:
                 return self._err(f"unknown_action: {action}")
@@ -138,7 +165,11 @@ class HubService:
 
     def emergency_stop(self) -> dict[str, Any]:
         errors: list[str] = []
-        for name, motor in [("drive", self._drive), ("steer", self._steer), ("strike", self._strike)]:
+        for name, motor in [
+            ("drive", self._drive),
+            ("steer", self._steer),
+            ("strike", self._strike),
+        ]:
             if motor is not None:
                 try:
                     motor.stop()
@@ -149,7 +180,11 @@ class HubService:
         else:
             logger.warning("Emergency stop executed")
         self.watchdog.pet()
-        return {"ok": not errors, "data": {"action": "emergency-stop"}, "error": "; ".join(errors) or None}
+        return {
+            "ok": not errors,
+            "data": {"action": "emergency-stop"},
+            "error": "; ".join(errors) or None,
+        }
 
     def _ok(self, action: str, payload: ExecuteMotionCommand | None = None) -> dict[str, Any]:
         return {

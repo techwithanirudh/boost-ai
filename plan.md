@@ -101,7 +101,7 @@ bluetoothctl
 sudo rfcomm bind /dev/rfcomm0 00:16:53:XX:XX:XX
 ```
 
-Set `EV3_MAC=00:16:53:XX:XX:XX` in the root `.env`.
+Set `HUB_MAC=00:16:53:XX:XX:XX` in the root `.env`.
 
 ### 1.4 ev3-dc Key API
 
@@ -176,7 +176,7 @@ battery_pct = vehicle.battery  # 0-100 approx
 | `apps/hub/main.py` | Unchanged (FastAPI routes stay identical) |
 | `apps/hub/scripts/patch_pylgbst.py` | Delete — no longer needed |
 | `apps/hub/requirements.txt` | Regenerate after poetry update |
-| Root `.env` | Rename `HUB_MAC` → `EV3_MAC` (or keep `HUB_MAC`) |
+| Root `.env` | Rename `HUB_MAC` → `HUB_MAC` (or keep `HUB_MAC`) |
 
 ### 1.8 New `service.py` skeleton
 
@@ -193,7 +193,7 @@ class HubService:
         self.connected = False
         self._vehicle: ev3.TwoWheelVehicle | None = None
         self._us: ev3.Ultrasonic | None = None
-        self._mac = os.getenv("EV3_MAC") or os.getenv("HUB_MAC")
+        self._mac = os.getenv("HUB_MAC") or os.getenv("HUB_MAC")
         self.watchdog = Watchdog(timeout_s=5.0)
         self._execute_lock = threading.Lock()
 
@@ -348,7 +348,7 @@ Current violations in our web app:
 | P0 | ~~EV3 hub rewrite~~ | ✅ Done — ev3-dc, R3PTAR port layout |
 | P0 | Calibrate `_DRIVE_DEG_PER_CM` | Run `forward(10)`, measure actual travel, adjust constant |
 | P0 | Calibrate `_STEER_DEG_PER_HEADING_DEG` | Run `turn(90)`, measure actual heading change, adjust |
-| P0 | Pair EV3 via `bluetoothctl` on Pi | One-time setup, set `EV3_MAC` in `.env` |
+| P0 | Pair EV3 via `bluetoothctl` on Pi | One-time setup, set `HUB_MAC` in `.env` |
 | P1 | Restore robot prompts | Copy from `origin/main` `src/lib/prompts/robot/` |
 | P1 | shadcn reinstall | `bunx shadcn@latest add button card ...` |
 | P2 | Status panel full height | CSS tweak |

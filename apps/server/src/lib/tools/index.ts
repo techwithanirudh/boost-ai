@@ -3,6 +3,7 @@ import { getHealthTool } from "./get-health";
 import { getPoseTool } from "./get-pose";
 import { backwardTool, forwardTool } from "./motion";
 import { stopTool } from "./stop";
+import { strikeTool } from "./strike";
 import { turnTool } from "./turn";
 
 export const toolSet = {
@@ -12,5 +13,6 @@ export const toolSet = {
   getHealth: getHealthTool,
   getPose: getPoseTool,
   stop: stopTool,
+  strike: strikeTool,
   turn: turnTool,
 };
