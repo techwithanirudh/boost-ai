@@ -1,12 +1,15 @@
 import logging
 import math
 import os
+import queue
 import threading
 import time
+import types
 from typing import Any
 
 from pylgbst import get_connection_bleak
 from pylgbst.hub import MoveHub, VisionSensor
+from pylgbst.messages import MsgGenericError
 
 from .models import ExecuteMotionCommand
 from .safety import Watchdog
@@ -16,6 +19,74 @@ logger = logging.getLogger(__name__)
 _MOTOR_DEG_PER_CM = 20.5  # encoder degrees per cm of linear travel (56 mm wheel)
 _WHEEL_TRACK_CM = 11.0  # distance between wheel contact points (centre-to-centre)
 _BATTERY_MAX_VOLTS = 9.6  # 6×AA alkaline full charge (~1.6 V/cell)
+
+# Maximum time (seconds) to wait for a motor completion reply from the hub.
+# A motor command that never gets a completion reply (BLE drop, motor stall) would
+# otherwise block Hub.send() forever — there is no timeout in pylgbst.
+_SEND_TIMEOUT_S = 15.0
+
+
+def _patch_hub_send(hub: MoveHub) -> None:
+    """
+    Monkey-patch Hub.send() to add a reply timeout and prevent infinite hangs.
+
+    pylgbst's Hub.send() calls self._sync_replies.get() with no timeout.  If the
+    hub disconnects or a motor stalls the calling thread blocks permanently.  We
+    replace the method on the *instance* so the rest of the library is untouched.
+    """
+
+    original_send = hub.send  # bound method — keeps hub in closure
+
+    def send_with_timeout(msg: Any) -> Any:  # noqa: ANN401
+        import logging as _logging
+
+        log = _logging.getLogger("pylgbst.hub")
+        log.debug("Send message (patched): %r", msg)
+        msgbytes = msg.bytes()
+        if msg.needs_reply:
+            with hub._sync_lock:  # noqa: SLF001
+                assert not hub._sync_request, (  # noqa: SLF001
+                    "Pending request %r while trying to put %r" % (hub._sync_request, msg)  # noqa: SLF001
+                )
+                hub._sync_request = msg  # noqa: SLF001
+                log.debug("Waiting for sync reply to %r...", msg)
+
+            hub.connection.write(hub.HUB_HARDWARE_HANDLE, msgbytes)
+            try:
+                resp = hub._sync_replies.get(timeout=_SEND_TIMEOUT_S)  # noqa: SLF001
+            except queue.Empty:
+                # Timed out — clear stale sync state under the lock so _notify()
+                # doesn't try to put() into an already-drained queue later.
+                with hub._sync_lock:  # noqa: SLF001
+                    hub._sync_request = None  # noqa: SLF001
+                raise TimeoutError(f"No reply from hub within {_SEND_TIMEOUT_S}s for {msg!r}")
+            log.debug("Fetched sync reply: %r", resp)
+            if isinstance(resp, MsgGenericError):
+                raise RuntimeError(resp.message())
+            return resp
+        else:
+            hub.connection.write(hub.HUB_HARDWARE_HANDLE, msgbytes)
+            return None
+
+    # Bind as instance method so self-references in the closure are correct
+    hub.send = types.MethodType(send_with_timeout, hub)  # type: ignore[method-assign]
+
+
+def _clear_sync_state(hub: MoveHub) -> None:
+    """
+    Safely reset pylgbst's sync-request state.
+
+    Must be called while holding _execute_lock so no other motor command is
+    in-flight.  Acquires _sync_lock internally to avoid racing with _notify().
+    Drains _sync_replies so the queue never stays full.
+    """
+    with hub._sync_lock:  # noqa: SLF001
+        hub._sync_request = None  # noqa: SLF001
+        # Drain any stale reply so Queue(1) doesn't block _notify() next time
+        try:
+            hub._sync_replies.get_nowait()  # noqa: SLF001
+        except queue.Empty:
+            pass
 
 
 class HubService:
@@ -30,7 +101,8 @@ class HubService:
         self._x: float = 0.0  # metres, positive = forward from start
         self._y: float = 0.0  # metres, positive = left from start
         self._heading: float = 0.0  # degrees, 0 = forward, +90 = left, -90 = right
-        # Serialise motor commands to avoid pylgbst "Pending request" deadlock
+        # Serialise motor commands — prevents concurrent Hub.send() calls from
+        # triggering the "Pending request" assertion in pylgbst.
         self._execute_lock = threading.Lock()
 
     def connect(self) -> None:
@@ -53,6 +125,7 @@ class HubService:
                         pass
                     return
 
+                _patch_hub_send(hub)
                 self._hub = hub
                 self.connected = True
                 self._attach_distance_sensor()
@@ -154,19 +227,23 @@ class HubService:
         try:
             _run()
         except AssertionError as exc:
-            # pylgbst "Pending request" deadlock — clear stale state and retry once
+            # pylgbst "Pending request" — stale _sync_request from a previous
+            # command whose reply arrived late or was lost.  Clear it safely
+            # (under _sync_lock, queue drained) then retry once.
             logger.warning(
-                "pylgbst pending-request deadlock detected (%s) — clearing and retrying", exc
+                "pylgbst pending-request deadlock (%s) — clearing sync state and retrying", exc
             )
-            try:
-                hub._sync_request = None  # noqa: SLF001
-            except Exception:
-                pass
+            _clear_sync_state(hub)
             try:
                 _run()
             except Exception as retry_exc:
                 logger.error("Motor command failed after retry: %s", retry_exc)
                 return self._err(str(retry_exc))
+        except TimeoutError as exc:
+            # Hub stopped replying (BLE drop or motor stall).  State is already
+            # cleaned up inside send_with_timeout; just report the failure.
+            logger.error("Motor command timed out: %s", exc)
+            return self._err(str(exc))
         except ValueError as exc:
             return self._err(str(exc))
         except Exception as exc:
