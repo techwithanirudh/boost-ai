@@ -19,10 +19,6 @@ logger = logging.getLogger(__name__)
 _MOTOR_DEG_PER_CM = 20.5  # encoder degrees per cm of linear travel (56 mm wheel)
 _WHEEL_TRACK_CM = 11.0  # distance between wheel contact points (centre-to-centre)
 _BATTERY_MAX_VOLTS = 9.6  # 6×AA alkaline full charge (~1.6 V/cell)
-
-# Maximum time (seconds) to wait for a motor completion reply from the hub.
-# A motor command that never gets a completion reply (BLE drop, motor stall) would
-# otherwise block Hub.send() forever — there is no timeout in pylgbst.
 _SEND_TIMEOUT_S = 15.0
 
 
@@ -35,7 +31,7 @@ def _patch_hub_send(hub: MoveHub) -> None:
     replace the method on the *instance* so the rest of the library is untouched.
     """
 
-    original_send = hub.send  # bound method — keeps hub in closure
+    original_send = hub.send
 
     def send_with_timeout(msg: Any) -> Any:  # noqa: ANN401
         import logging as _logging
@@ -55,8 +51,6 @@ def _patch_hub_send(hub: MoveHub) -> None:
             try:
                 resp = hub._sync_replies.get(timeout=_SEND_TIMEOUT_S)  # noqa: SLF001
             except queue.Empty:
-                # Timed out — clear stale sync state under the lock so _notify()
-                # doesn't try to put() into an already-drained queue later.
                 with hub._sync_lock:  # noqa: SLF001
                     hub._sync_request = None  # noqa: SLF001
                 raise TimeoutError(f"No reply from hub within {_SEND_TIMEOUT_S}s for {msg!r}")
@@ -68,7 +62,6 @@ def _patch_hub_send(hub: MoveHub) -> None:
             hub.connection.write(hub.HUB_HARDWARE_HANDLE, msgbytes)
             return None
 
-    # Bind as instance method so self-references in the closure are correct
     hub.send = types.MethodType(send_with_timeout, hub)  # type: ignore[method-assign]
 
 
