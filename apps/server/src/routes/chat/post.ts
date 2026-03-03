@@ -16,7 +16,7 @@ import {
 } from "ai";
 import { z } from "zod";
 import { createLogger } from "@/lib/logger";
-import { systemPrompt } from "@/lib/prompts/system";
+import { systemPrompt } from "@/lib/prompts";
 import { provider } from "@/lib/providers";
 import { getResumableStreamContext } from "@/lib/resume-stream";
 import { generateTitleFromUserMessage } from "@/lib/title";
