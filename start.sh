@@ -19,9 +19,8 @@ command -v bun     >/dev/null || die "bun not found — https://bun.sh"
 command -v poetry  >/dev/null || die "poetry not found — https://python-poetry.org"
 command -v ffmpeg  >/dev/null || die "ffmpeg not found — sudo apt install ffmpeg"
 
-MEDIAMTX_BIN="./bin/mediamtx"
-HUB_MAC="$(awk -F= '/^HUB_MAC=/{print $2}' .env | tail -n1 | tr -d '"' | tr -d "'")"
 
+MEDIAMTX_BIN="./bin/mediamtx"
 if [[ ! -x "$MEDIAMTX_BIN" ]]; then
   mkdir -p ./bin
   warn "mediamtx binary not found. Downloading v1.16.2 for linux/arm64…"
@@ -30,17 +29,6 @@ if [[ ! -x "$MEDIAMTX_BIN" ]]; then
     | tar xz -C ./bin mediamtx
   chmod +x "$MEDIAMTX_BIN"
   ok "mediamtx downloaded."
-fi
-
-info "Patching pylgbst…"
-(cd apps/hub && poetry run python scripts/patch_pylgbst.py)
-
-if [[ -n "$HUB_MAC" ]] && command -v bluetoothctl >/dev/null 2>&1; then
-  warn "Resetting BLE state for HUB_MAC=${HUB_MAC}…"
-  bluetoothctl disconnect "$HUB_MAC" >/dev/null 2>&1 || true
-  bluetoothctl remove "$HUB_MAC" >/dev/null 2>&1 || true
-  sudo -n bluetoothctl disconnect "$HUB_MAC" >/dev/null 2>&1 || true
-  sudo -n bluetoothctl remove "$HUB_MAC" >/dev/null 2>&1 || true
 fi
 
 info "Starting…"

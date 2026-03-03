@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from hub.models import ExecuteMotionCommand
 from hub.service import HubService
 
-# Load root .env (boost/.env) so HUB_MAC etc. are available
+# Load root .env (boost/.env) so EV3_MAC etc. are available
 load_dotenv(Path(__file__).parent.parent.parent / ".env")
 
 logging.basicConfig(

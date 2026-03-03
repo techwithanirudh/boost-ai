@@ -1,533 +1,357 @@
-# Boost Refactor Plan (AI SDK Resumable Streams + Modular UI)
+# Boost Robot — Master Plan
 
-## 0) Skills Used (and Why)
-- `ai-sdk`: canonical APIs for `streamText`, `toUIMessageStreamResponse`, resumable streams, loop control, and middleware.
-- `ai-elements`: component patterns for modular chat UI building blocks.
-- `hono`: route and streaming structure for the current server runtime.
-- `vercel-react-best-practices`: client architecture and performance-oriented React composition.
+---
 
-## 1) Scope and Outcomes
-This plan replaces the current custom SSE/session stream flow with AI SDK UI-message streaming semantics, adds Redis-backed resumability, introduces explicit loop/steering control, and restructures the web UI into modular components while preserving robot-specific telemetry (snapshots, motion filmstrip, action log).
+## Part 0 — Robot Build Decision
 
-### Primary Outcomes
-1. Server emits AI SDK UI-message stream protocol (`createUIMessageStreamResponse` / `toUIMessageStreamResponse`) instead of custom ad-hoc SSE shape.
-2. Stream resumption works across refresh/reconnect via Redis + `resumable-stream`.
-3. Session/chat persistence is first-class in DB: messages + active stream id + step metadata.
-4. Agent loop is explicit and bounded using AI SDK loop controls (`stopWhen`, `prepareStep`, optional `ToolLoopAgent`).
-5. UI uses composable ai-elements style architecture with clear modules and typed tool rendering.
-6. Steering is supported in a safe way (initially non-interrupt steering; optional interrupt mode as separate behavior).
+### Requirements
+- Moves fast (wheels or treads)
+- Rotating head / camera pan (medium motor)
+- Pick up or hold objects (forklift-style) — nice to have
+- Pi 3 + SSD + Pi Camera 3 must mount cleanly
 
-## 2) Current-State Snapshot (Repo-Aligned)
-- Server currently runs Hono routes under `apps/server/src/routes`.
-- Current session streaming route is `apps/server/src/routes/sessions.ts` and emits custom SSE events (`session_started`, `step`, `session_result`, etc.).
-- Orchestration logic exists in `apps/server/src/services/orchestrator.ts` with `streamText`, `prepareStep`, tools, and image context.
-- Active stream store is currently in-memory (`apps/server/src/lib/stream-store.ts`) and not resumable across process restarts.
-- Web client consumes custom SSE via `apps/web/src/lib/api.ts` and renders bespoke dashboard in `apps/web/src/routes/session.$id.tsx`.
+### Motor budget (31313 set)
+```
+2× Large Motor  → drive
+1× Medium Motor → head pan OR gripper (pick one)
+```
+All 3 features simultaneously requires buying 1 extra Medium Motor (~£15).
 
-## 3) Non-Negotiable Technical Constraints
-1. Use AI SDK stream protocol for chat-compatible UI and tool events.
-2. Use persistent stream storage for resumability (Redis + `resumable-stream`).
-3. Persist chat/session state in DB (not memory-only).
-4. Keep robot control safety path independent from UI stream reliability.
-5. Keep emergency stop always available and preemptive.
+### Shortlist
 
-## 4) Product/Behavior Decisions
+| Robot | Drive | Head pan | Grip/lift | Pi mount | Speed | Notes |
+|---|---|---|---|---|---|---|
+| **TRACK3R** | tank treads ✅ | add medium ✅ | ❌ | ✅ flat deck | good | best all-rounder for AI nav |
+| **GRIPP3R** | wheels ✅ | ❌ | claw ✅ | ⚠️ ok | good | only one with real grabber |
+| **EV3MEG** | wheels (droid) | unclear ⚠️ | ❌ | ❌ tiny | fast? | "Creatures & Droids" line follower — arms likely decorative, not functional; Pi won't fit cleanly |
+| **BOBB3E** | wheels ✅ | ❌ | fork lift ✅ | ⚠️ ok | ok | scoops/lifts, not precise grab |
 
-### 4.1 Stream Model
-Adopt AI SDK UI message stream end-to-end:
-- Backend response: `createUIMessageStreamResponse(...)` for custom `data-*` parts and merged stream support; `toUIMessageStreamResponse(...)` when simple forwarding is sufficient.
-- Frontend transport: `useChat` + `DefaultChatTransport`
-- Stream header contract: AI SDK UI stream protocol (`x-vercel-ai-ui-message-stream: v1` handled by helper)
+### EV3MEG — verdict
+Officially categorised as "Creatures & Droids / Line Follower". Same family as the R2D2-style EV3D4 and Wall-E KRAZ3. Compact droid body — arms are decorative, color sensor points down for line tracking. **Not suitable**: no room for Pi + SSD, no gripper, arms don't manipulate objects.
 
-### 4.2 Resumability
-Implement two endpoints per chat/session:
-- `POST /api/chat` (or `/v1/chat`) creates stream and stores `activeStreamId`
-- `GET /api/chat/:id/stream` resumes stream or returns HTTP 204
+### Recommendation: TRACK3R ✅
 
-### 4.3 Abort vs Resume Tradeoff
-AI SDK docs are explicit: `resume: true` conflicts with abort semantics.
-Plan:
-- Mode A (default for long running): `resume: true`, disable client abort/stop-stream operation.
-- Mode B (manual steering interrupt mode): `resume: false`, allow interrupt/abort.
-- Emergency stop robot endpoint remains independent and always active.
-- For UI-message responses, include `consumeSseStream: consumeStream` when abort handling and `onFinish(isAborted)` cleanup are required.
+- Tank treads, spins in place — ideal for AI scan behaviour
+- Flat top deck — Pi 3 + SSD mount cleanly with Technic beams
+- Medium motor on a front arm = camera pan L/R
+- Low centre of gravity, stable
 
-### 4.4 Steering Strategy
-- V1 steering (first implementation): non-interrupt steering via user follow-up message appended into chat/session context.
-- V2 steering (optional): interrupt steering in Mode B by ending active generation and starting a new one with operator instruction.
-- Do not mix interrupt steering with resumable mode in same request lifecycle.
+GRIPP3R ruled out: EV3 brick is the body, no flat deck, Pi + SSD hang off the back awkwardly, top-heavy if stacked above.
 
-## 5) Target Architecture
+### Port layout
 
-```text
-apps/web (TanStack + AI SDK UI)
-  -> useChat(id, resume, transport)
-  -> POST /v1/chat (create stream)
-  -> GET /v1/chat/:id/stream (resume stream)
-
-apps/server (Hono + AI SDK Core/UI)
-  -> streamText / ToolLoopAgent (loop control)
-  -> toUIMessageStreamResponse
-  -> consumeSseStream -> resumable-stream (Redis)
-  -> DB persistence (messages, active_stream_id, step summaries)
-  -> robot tools -> apps/hub
-
-Redis
-  -> transient stream event storage for resumable-stream
-
-Postgres (packages/db)
-  -> sessions/chats, ui_messages, active_stream_id, steps/tool execution
-
-apps/hub (FastAPI)
-  -> robot execution + safety watchdog + estop
+```
+Port A  Medium Motor  camera pan (L/R)
+Port B  Large Motor   left tread
+Port C  Large Motor   right tread
+Port 4  Infrared      proximity
 ```
 
-## 6) Data Model Changes (DB)
+### Pi mounting
 
-## 6.1 New / Updated Tables
-1. `sessions` (existing or extend)
-- `id` (pk)
-- `goal` (text)
-- `status` (`running|completed|stopped|failed`)
-- `active_stream_id` (nullable text)
-- `resume_enabled` (boolean, default true)
-- `created_at`, `updated_at`
-
-2. `session_messages`
-- `id` (pk, server-generated)
-- `session_id` (fk)
-- `role` (`user|assistant|system|tool`)
-- `parts_json` (JSONB UIMessage parts)
-- `created_at`
-
-3. `session_steps`
-- `id` (pk)
-- `session_id` (fk)
-- `step_index` (int)
-- `action_text` (nullable text)
-- `reasoning_text` (nullable text)
-- `snapshot_url_or_data` (nullable text)
-- `movement_snapshots_json` (JSONB)
-- `tool_calls_json` (JSONB)
-- `created_at`
-
-4. `session_events` (optional audit)
-- `id`, `session_id`, `event_type`, `payload_json`, `created_at`
-
-## 6.2 Indexes
-- `sessions(status, updated_at desc)`
-- `session_messages(session_id, created_at)`
-- `session_steps(session_id, step_index)` unique
-
-## 7) Server Refactor Plan (Hono)
-
-## 7.1 New Route Structure
-- `apps/server/src/routes/chat.ts` (new)
-  - `POST /v1/chat`
-  - `GET /v1/chat/:id/stream`
-  - `POST /v1/chat/:id/stop` (robot estop + status update)
-- Keep `sessions.ts` temporarily as compatibility shim.
-
-## 7.2 POST /v1/chat Flow
-1. Validate payload: `{ id, message, mode?, metadata? }`.
-2. Load session + persisted messages.
-3. Append new user message and clear stale `active_stream_id`.
-4. Start model generation using `streamText` (or agent stream).
-5. Return `createUIMessageStreamResponse` (or `toUIMessageStreamResponse`) with:
-- `originalMessages`
-- `generateMessageId`
-- `onFinish` persisting final messages and clearing `active_stream_id`
-- `consumeSseStream` creating resumable stream and saving `active_stream_id`
-
-## 7.3 GET /v1/chat/:id/stream Flow
-1. Load session by id.
-2. If no `active_stream_id`, return `204 No Content`.
-3. Resume via `resumeExistingStream(active_stream_id)`.
-4. Return with `UI_MESSAGE_STREAM_HEADERS`.
-
-## 7.4 Stream Context and Infra
-- Replace `lib/stream-store.ts` in-memory map with Redis-backed resumable context adapter.
-- Add `apps/server/src/lib/stream-context.ts` wrapping `createResumableStreamContext`.
-- Add robust cleanup for stale stream IDs and expired Redis keys.
-
-## 7.5 Orchestrator Integration
-Keep robot decision engine but emit AI SDK-native message parts:
-- Continue multi-step control via:
-  - `stopWhen: [stepCountIs(...), hasToolCall('complete'), hasToolCall('stop')]`
-  - `prepareStep` for dynamic image/depth context and movement history
-- Record per-step data into `session_steps` from callbacks.
-- Emit robot telemetry as `data-*` stream parts (e.g. `data-robot-step`, `data-snapshot`, `data-filmstrip`) via stream writer merge, not custom SSE events.
-
-## 7.6 Loop Control Hardening
-- Enforce max step count and timeout budgets.
-- Restrict tool availability per phase (`activeTools` in `prepareStep` when needed).
-- Add deterministic fallback to `stop` on invalid tool outputs.
-- Keep room for two loop modes:
-  - auto tool execution (`execute` on tool definitions)
-  - fully manual tool execution (tools without `execute`, server handles `finishReason === 'tool-calls'` loop)
-
-## 8) Language Model Middleware Plan
-Use `wrapLanguageModel` in `apps/server/src/lib/providers.ts` (or new `lib/model.ts`).
-
-## 8.1 Middleware Stack (Order Matters)
-1. `defaultSettingsMiddleware`
-- default temperature, maxOutputTokens, provider options.
-
-2. `extractReasoningMiddleware` (conditional per model)
-- parse reasoning tags when model exposes them.
-
-3. Custom logging middleware (`wrapStream` + `wrapGenerate`)
-- structured telemetry for params, token usage, finish reason, step timings.
-
-4. Optional cache middleware (phase 2)
-- cache generate calls only where deterministic and safe.
-
-5. Optional `addToolInputExamplesMiddleware`
-- only if provider has weak tool-call grounding.
-
-## 8.2 Metadata Strategy
-Pass per-request metadata through `providerOptions`:
-- `sessionId`, `operatorId`, `traceId`, `mode`, `stepIndex`
-
-## 8.3 Guardrails in Middleware
-Implement stream-safe guardrails carefully:
-- input-side transform rules in `transformParams`
-- output guardrails for complete responses
-- avoid brittle token-level redaction for partial chunks unless fully tested
-
-## 9) Web UI Refactor Plan (TanStack + Modular Components)
-
-## 9.1 Core Hook Migration
-Move from custom SSE parser to `useChat`:
-- `id` = session id
-- `messages` initial state from server
-- `resume` toggled by mode
-- `transport: new DefaultChatTransport({...})`
-  - custom `prepareSendMessagesRequest`
-  - custom `prepareReconnectToStreamRequest`
-
-## 9.2 Component Architecture (new modules)
-Under `apps/web/src/components/session/`:
-1. `session-shell.tsx`
-2. `session-topbar.tsx`
-3. `session-conversation.tsx`
-4. `session-reasoning-panel.tsx`
-5. `session-snapshot-panel.tsx`
-6. `session-filmstrip-grid.tsx`
-7. `session-action-log.tsx`
-8. `session-operator-input.tsx`
-9. `session-status-card.tsx`
-
-## 9.3 ai-elements Usage Pattern
-Adopt ai-elements composition where it fits:
-- `Conversation`, `ConversationContent`, `ConversationScrollButton`
-- `Message`, `MessageContent`, `MessageResponse`, `MessageActions`
-- keep robot-specific panels outside generic chat components
-
-## 9.4 Typed Tool Rendering
-Render tool states from message parts:
-- `tool-forward`, `tool-backward`, `tool-turn`, `tool-stop`, `tool-complete`
-- states: `input-available`, `output-available`, `output-error`
-
-## 9.5 Visual Layout
-Keep dashboard style but componentized:
-- left: live snapshot + action overlay + reasoning
-- right: system status + filmstrip grid
-- bottom: movement/action timeline + operator input
-
-## 9.6 Performance/UX Rules
-- avoid expensive rerenders by isolating panels and memoizing derived state.
-- avoid polling when stream provides data.
-- load fallback snapshot only when no step/snapshot message part is available.
-
-## 10) API Contracts
-
-## 10.1 POST /v1/chat
-Request:
-```json
-{
-  "id": "session-id",
-  "message": { "id": "...", "role": "user", "parts": [{ "type": "text", "text": "..." }] },
-  "mode": "resumable"
-}
+```
+[Pi Camera on medium motor arm] ← rotates L/R
+[Pi 3 + SSD flat on Technic beam deck]
+[EV3 brick in chassis]
+[tank treads]
 ```
 
-Response:
-- AI SDK UI message stream (SSE/data stream protocol)
-- May include custom `data-*` parts for robot telemetry and UI state.
+USB-A cable: Pi → EV3 for power + USB networking (192.168.2.1 fixed IP).
 
-## 10.2 GET /v1/chat/:id/stream
-- `204` when no active stream
-- `200` + UI message stream when active
+---
 
-## 10.3 POST /v1/chat/:id/stop
-- sends emergency stop to hub
-- sets session status `stopped`
-- does not require current stream success
+## Part 1 — Hardware: EV3 Migration (ev3-dc)
 
-## 11) Migration Strategy (Low Risk)
+### 1.1 Decision
 
-## Phase 1: Server Streaming Foundation
-1. Add DB fields/tables for message + stream tracking.
-2. Add Redis + resumable stream context integration.
-3. Implement new `/v1/chat` POST + `/v1/chat/:id/stream` GET.
-4. Keep existing `/v1/sessions/stream` for temporary backward compatibility.
+Switch from LEGO Boost (`pylgbst` + BLE) to **LEGO Mindstorms EV3** using
+**[ev3-dc](https://pypi.org/project/ev3-dc/)** (`ev3_dc`).
 
-## Phase 2: Web Hook Migration
-1. Introduce new chat API client using `useChat`.
-2. Switch session page to use new transport behind feature flag.
-3. Preserve current dashboard visuals with new data source.
+| | LEGO Boost (old) | LEGO EV3 (new) |
+|---|---|---|
+| Library | `pylgbst` + `bleak` | `ev3-dc` |
+| Protocol | BLE (Bluetooth Low Energy) | Bluetooth Classic serial / USB |
+| Firmware | Proprietary LEGO Boost | Stock EV3 firmware (no flash needed) |
+| Where server runs | Pi | Pi (unchanged) |
+| Connection | BLE auto-discovery | Bluetooth serial (paired MAC) |
+| Motor API | `hub.motor_AB.angled(deg, spd_L, spd_R)` | `vehicle.drive_straight(m)` / `drive_turn(deg, radius)` |
+| Sensor API | `VisionSensor.COLOR_DISTANCE_FLOAT` | `Ultrasonic().distance_cm` |
 
-## Phase 3: Component Modularization
-1. Split `session.$id.tsx` into component modules.
-2. Add typed tool-result renderers.
-3. Add steering mode toggle (`resumable` vs `interruptible`).
+### 1.2 Why ev3-dc
 
-## Phase 4: Middleware and Loop Hardening
-1. Add `wrapLanguageModel` middleware stack.
-2. Add loop budgets, tool gating, and detailed telemetry.
-3. Add regression tests for stop/resume/race conditions.
+- Server stays entirely on Pi — no SD card flash, no ev3dev, no code on the brick.
+- Stock EV3 firmware accepts LEGO Direct Commands natively over Bluetooth serial.
+- `TwoWheelVehicle` provides a high-level drive API with built-in position/heading tracking.
+- Supports `BLUETOOTH`, `USB`, and `WIFI` transports; swap with one constant.
 
-## Phase 5: Decommission Legacy Path
-1. Remove old custom SSE parser path.
-2. Remove in-memory stream store.
-3. Remove compatibility endpoints once stable.
+### 1.3 Bluetooth Pairing Setup (Pi → EV3, one-time)
 
-## 12) Detailed File Change Map
+```bash
+# On Pi
+bluetoothctl
+  power on
+  agent on
+  scan on
+  # note EV3 MAC (format 00:16:53:XX:XX:XX)
+  pair 00:16:53:XX:XX:XX
+  trust 00:16:53:XX:XX:XX
+  quit
 
-### Server
-- `apps/server/src/routes/chat.ts` (new)
-- `apps/server/src/routes/sessions.ts` (compat shim, then cleanup)
-- `apps/server/src/services/orchestrator.ts` (adapt callbacks + persistence integration)
-- `apps/server/src/lib/providers.ts` (middleware wrapping)
-- `apps/server/src/lib/stream-context.ts` (new)
-- `apps/server/src/lib/stream-store.ts` (remove or turn into adapter)
-- `apps/server/src/index.ts` (route registration)
+# Bind serial port (add to /etc/rc.local or systemd unit)
+sudo rfcomm bind /dev/rfcomm0 00:16:53:XX:XX:XX
+```
 
-### Web
-- `apps/web/src/routes/session.$id.tsx` (orchestrates new modular components)
-- `apps/web/src/lib/api.ts` (replace custom SSE code path with chat transport helpers)
-- `apps/web/src/components/session/*` (new module set)
+Set `EV3_MAC=00:16:53:XX:XX:XX` in the root `.env`.
 
-### DB
-- `packages/db/src/schema.ts` and/or `packages/db/src/schema/*` (new tables/columns)
-- `packages/db/src/queries/sessions.ts` (expand to messages + stream id operations)
-- add migrations accordingly
+### 1.4 ev3-dc Key API
 
-## 13) Testing Plan
+```python
+import ev3_dc as ev3
 
-## 13.1 Unit Tests
-- stream-id lifecycle functions (set/clear/resume behaviors)
-- middleware transform and logging behavior
-- loop control conditions and fallback stop behavior
+# Connection (blocking, ~2s)
+vehicle = ev3.TwoWheelVehicle(
+    radius_wheel=0.028,   # metres — EV3 large wheel rubber tyre (56mm Ø / 2)
+    tread=0.117,          # metres — track width centre-to-centre (measure your build)
+    protocol=ev3.BLUETOOTH,
+    host="00:16:53:XX:XX:XX",
+    speed=30,             # default % (0-100)
+    ramp_up=500,          # ms acceleration ramp
+    ramp_down=500,        # ms deceleration ramp
+)
 
-## 13.2 Integration Tests
-- POST starts stream and stores active stream id
-- GET resumes stream and returns AI SDK headers
-- onFinish clears active stream id
-- missing stream returns 204
-- emergency stop works while stream active
+# Move forward N cm
+vehicle.drive_straight(0.20)   # 20 cm in metres
+vehicle.stop()
 
-## 13.3 End-to-End Scenarios
-1. Start session, refresh page, resume stream successfully.
-2. Session completes, refresh page, no stream to resume (204).
-3. Redis key expiration path gracefully recovers.
-4. Operator steering message appears in next steps.
-5. Emergency stop interrupts robot regardless of stream status.
+# Move backward N cm
+vehicle.drive_straight(-0.20)
+vehicle.stop()
 
-## 14) Observability
-- Structured logs for: session id, stream id, step number, tool name, latency, token usage, finish reason.
-- Metrics counters:
-  - active streams
-  - resume attempts / success / fail
-  - tool call success / fail
-  - emergency stop count
-- Trace correlation via `traceId` threaded through client, server, middleware.
+# Turn in place N degrees (positive = left, negative = right)
+vehicle.drive_turn(90, 0.0)   # radius=0 → spin in place
+vehicle.stop()
 
-## 15) Risks and Mitigations
-1. Abort/resume incompatibility confusion
-- mitigate with explicit mode toggle and UI labels
+# Emergency stop / halt
+vehicle.stop()
 
-2. Race conditions around `active_stream_id`
-- clear before new stream, clear on finish, guard against stale IDs
+# Distance sensor (port 1)
+us = ev3.Ultrasonic(port=ev3.PORT_1, ev3_obj=vehicle)
+cm = us.distance_cm   # float
 
-3. Redis stream expiry before reconnect
-- handle as normal completion/expired state; return 204 and surface status
+# State / battery
+battery_pct = vehicle.battery  # 0-100 approx
+```
 
-4. UI regressions from hook migration
-- feature flag and parallel old/new route testing
+### 1.5 Calibration Constants (measure your build)
 
-5. Orchestrator complexity growth
-- isolate step extraction/persistence helpers and cap complexity per file
+| Constant | Value | How to measure |
+|---|---|---|
+| `radius_wheel` | `0.028` m | EV3 large tyre Ø = 56.5 mm → r = 0.0283 m |
+| `tread` | measured | Distance between left and right wheel contact points (centre to centre) |
+| Speed default | `30` % | Tune for surface; higher on smooth floor |
+| `ramp_up/down` | `500` ms | Reduce for snappier moves, increase for smoother |
 
-## 16) Acceptance Criteria
-1. Chat/session stream uses AI SDK UI protocol end-to-end.
-2. Refresh mid-run resumes ongoing stream when in resumable mode.
-3. Session and message history persist in DB and rehydrate on reload.
-4. Robot step telemetry (action, snapshots, filmstrip) is visible in modular UI.
-5. Emergency stop remains reliable and independent from stream state.
-6. Legacy custom SSE route can be removed without feature regression.
+### 1.6 Call mapping (old → new)
 
-## 17) Immediate Next Slice (Execution Order)
-1. Implement DB schema changes for `active_stream_id` + `session_messages`.
-2. Add Redis resumable-stream adapter and new `chat` routes.
-3. Wire `toUIMessageStreamResponse({ consumeSseStream, onFinish })` in POST.
-4. Implement resume GET endpoint with `UI_MESSAGE_STREAM_HEADERS` + 204 behavior.
-5. Switch web session route to `useChat` with custom transport and resumable mode.
-6. Split UI into modular components and map typed tool parts to snapshot/filmstrip panels.
-7. Add middleware wrapper + telemetry.
-8. Add integration tests for resume lifecycle and emergency stop.
+| Old (`service.py`) | New (`service.py`) |
+|---|---|
+| `get_connection_bleak(hub_mac=...)` | `ev3.TwoWheelVehicle(radius_wheel, tread, protocol=ev3.BLUETOOTH, host=mac)` |
+| `hub.motor_AB.angled(deg, spd, spd, wait_complete=True)` forward | `vehicle.drive_straight(dist_m); vehicle.stop()` |
+| `hub.motor_AB.angled(deg, -spd, -spd, wait_complete=True)` backward | `vehicle.drive_straight(-dist_m); vehicle.stop()` |
+| `hub.motor_AB.angled(motor_deg, dir*spd, -dir*spd, wait_complete=True)` turn | `vehicle.drive_turn(deg_signed, 0.0); vehicle.stop()` |
+| `hub.motor_AB.stop()` | `vehicle.stop()` |
+| `sensor.subscribe(cb, mode=VisionSensor.COLOR_DISTANCE_FLOAT)` | `ev3.Ultrasonic(port=ev3.PORT_1, ev3_obj=vehicle)` |
+| `_patch_hub_send` timeout hack | Not needed — ev3-dc uses blocking serial with built-in timeout |
+| `_clear_sync_state` retry hack | Not needed |
+| `self._motor_deg_per_cm` manual calc | Not needed — `TwoWheelVehicle` handles internally |
 
-## 17.1 Current Progress Log (Implemented)
-1. Implemented a manual session loop in `apps/server/src/services/orchestrator.ts` via `runSession(...)`:
-- explicit `for` loop over steps
-- one-model-step-per-iteration (`stopWhen: [stepCountIs(1)]`)
-- per-step parsing of tool calls/results and step event emission
-- persisted message history each iteration
+### 1.7 Files to change
 
-2. Implemented interrupt path for emergency stop:
-- added in-process run cancellation in orchestrator service (now superseded by `abortSession` + `AbortController`)
-- wired `POST /v1/sessions/:id/stop` to interrupt active AI run before hub emergency stop (implementation now uses `abortSession(...)`)
-- active run aborts immediately instead of only writing DB status
+| File | Change |
+|---|---|
+| `apps/hub/pyproject.toml` | Remove `pylgbst`, `bleak`; add `ev3-dc` |
+| `apps/hub/hub/service.py` | Full rewrite — replace `HubService` internals |
+| `apps/hub/hub/safety.py` | Watchdog stays unchanged |
+| `apps/hub/hub/models.py` | Unchanged (`ExecuteMotionCommand`) |
+| `apps/hub/main.py` | Unchanged (FastAPI routes stay identical) |
+| `apps/hub/scripts/patch_pylgbst.py` | Delete — no longer needed |
+| `apps/hub/requirements.txt` | Regenerate after poetry update |
+| Root `.env` | Rename `HUB_MAC` → `EV3_MAC` (or keep `HUB_MAC`) |
 
-3. Preserved `apps/server/src/lib/agents/orchestrator.ts` unchanged and added compatibility export:
-- `createToolSet(sessionId)` now exported from `apps/server/src/lib/tools/index.ts` to keep legacy agent compile path valid.
+### 1.8 New `service.py` skeleton
 
-4. Validation:
-- `apps/server` typecheck passes (`bun run typecheck` in `apps/server`)
-- ultracite checks/fixes applied to touched server files
+```python
+import ev3_dc as ev3
+from .models import ExecuteMotionCommand
+from .safety import Watchdog
 
-## 18) Reference Material Used
-- AI SDK docs (local):
-  - `docs/04-ai-sdk-ui/03-chatbot-resume-streams.mdx`
-  - `docs/04-ai-sdk-ui/50-stream-protocol.mdx`
-  - `docs/03-agents/04-loop-control.mdx`
-  - `docs/07-reference/01-ai-sdk-core/16-tool-loop-agent.mdx`
-- Skills:
-  - `/.agents/skills/ai-sdk/SKILL.md`
-  - `/.agents/skills/ai-elements/SKILL.md`
-  - `/.agents/skills/hono/SKILL.md`
-  - `/.agents/skills/vercel-react-best-practices/SKILL.md`
-- External repos to align with during implementation:
-  - `https://github.com/vercel-labs/ai-sdk-persistence-db`
-  - `https://github.com/vercel/ai/tree/main/examples/next/app/chat/%5BchatId%5D`
-  - `https://github.com/vercel/ai-chatbot`
+_WHEEL_RADIUS_M = 0.028
+_TREAD_M = 0.117        # TODO: measure your build
 
-## 18.1 Cleanup / Scrap Matrix (What to Remove vs Keep)
-### Remove (when new chat stream path is live)
-1. `apps/server/src/lib/stream-store.ts`
-- reason: in-memory only; replaced by Redis-backed resumable streams.
+class HubService:
+    def __init__(self):
+        self.connected = False
+        self._vehicle: ev3.TwoWheelVehicle | None = None
+        self._us: ev3.Ultrasonic | None = None
+        self._mac = os.getenv("EV3_MAC") or os.getenv("HUB_MAC")
+        self.watchdog = Watchdog(timeout_s=5.0)
+        self._execute_lock = threading.Lock()
 
-2. Custom SSE contract in `apps/server/src/routes/sessions.ts` (`session_started`, `step`, `session_result`, ...)
-- reason: superseded by AI SDK UI message stream protocol.
+    def connect(self):
+        while not self._stop:
+            try:
+                v = ev3.TwoWheelVehicle(
+                    _WHEEL_RADIUS_M, _TREAD_M,
+                    protocol=ev3.BLUETOOTH, host=self._mac,
+                    speed=30, ramp_up=500, ramp_down=500,
+                )
+                self._us = ev3.Ultrasonic(port=ev3.PORT_1, ev3_obj=v)
+                self._vehicle = v
+                self.connected = True
+                return
+            except Exception as e:
+                logger.error("EV3 connect failed: %s — retry in 5s", e)
+                time.sleep(5)
 
-3. Custom SSE parser logic in `apps/web/src/lib/api.ts` and session page stream parser glue
-- reason: superseded by `useChat` + `DefaultChatTransport`.
+    def execute(self, payload: ExecuteMotionCommand) -> dict:
+        if not self.connected or self._vehicle is None:
+            return self._err("ev3_not_connected")
+        with self._execute_lock:
+            return self._execute_inner(payload)
 
-### Keep (for now)
-1. `apps/server/src/lib/agents/orchestrator.ts`
-- kept intentionally (user request); compile-compatible via `createToolSet`.
+    def _execute_inner(self, payload: ExecuteMotionCommand) -> dict:
+        v = self._vehicle
+        a = payload.action
+        speed_pct = int(round(payload.speed * 100))  # 0-1 → 0-100
 
-2. `apps/server/src/routes/sessions.ts`
-- keep as compatibility shim while `v1/chat` endpoints are introduced.
+        try:
+            if a == "stop":
+                v.stop()
+            elif a == "forward_cm":
+                dist_m = max(0.05, min(10.0, payload.value)) / 100.0
+                v.drive_straight(dist_m)
+                v.stop()
+            elif a == "backward_cm":
+                dist_m = max(0.05, min(10.0, payload.value)) / 100.0
+                v.drive_straight(-dist_m)
+                v.stop()
+            elif a == "turn_deg":
+                deg = max(-180.0, min(180.0, payload.value))
+                v.drive_turn(-deg, 0.0)   # ev3-dc: + = left, robot: + = right → invert
+                v.stop()
+            else:
+                return self._err(f"unknown_action: {a}")
+        except Exception as e:
+            logger.error("EV3 command failed: %s", e)
+            return self._err(str(e))
 
-3. Robot tool layer in `apps/server/src/lib/tools/*`
-- keep and reuse for both manual loop and future UI-stream route.
+        self.watchdog.pet()
+        return self._ok(a, payload)
 
-### Refactor Next
-1. Split `apps/server/src/services/orchestrator.ts` into:
-- `loop-runner.ts` (manual loop engine)
-- `step-parser.ts` (tool/result extraction)
-- `step-context.ts` (image prompt assembly)
+    def state(self) -> dict:
+        distance = None
+        battery = None
+        if self._vehicle:
+            try:
+                battery = self._vehicle.battery
+            except Exception:
+                pass
+        if self._us:
+            try:
+                distance = self._us.distance_cm
+            except Exception:
+                pass
+        return {"connected": self.connected, "distance": distance, "battery": battery}
+```
 
-2. Move session-stop state (`AbortController` map) into dedicated runtime module:
-- easier testing
-- avoids monolithic orchestrator file growth
+### 1.9 Sign convention note
 
-## 18.2 Emergency Stop Design (Authoritative)
-1. Emergency stop must do three things, in order:
-- abort the active AI generation (`abortSession` via `AbortController`)
-- send physical stop to hub (`hub.emergencyStop`)
-- persist session status to `stopped`
+ev3-dc `drive_turn(angle, radius)`:
+- Positive angle → left turn
+- Our robot convention: positive degrees → clockwise (right)
+- Fix: negate the angle in the `turn_deg` branch (`-deg`)
 
-2. Current status:
-- implemented in `POST /v1/sessions/:id/stop` and manual loop interrupt path.
+### 1.10 Dependencies
 
-3. Remaining hardening:
-- make stop idempotent and return distinct statuses (`already_stopped`, `stop_requested`)
-- add telemetry event for every stop request and completion
-- ensure new resumable chat endpoints share same stop controller path
+```toml
+# pyproject.toml
+ev3-dc = "^0.9"    # replaces pylgbst + bleak
+```
 
-## 18.3 Manual Loop Guidance (From AI SDK Docs)
-1. Full manual loop pattern:
-- call `streamText` in a while-loop
-- append `result.response.messages` to history
-- inspect `finishReason`
-- when `finishReason === 'tool-calls'`, execute tools manually and append `tool-result` messages
-- terminate when finish reason is no longer `tool-calls` or custom budget/iteration cap is reached
+No `bleak`, no `asyncio` Bluetooth loops — ev3-dc uses synchronous `bluetooth` / `pyserial` under the hood for classic BT serial.
 
-2. Why this matters for this project:
-- enables deterministic robot safety hooks between model steps
-- allows explicit DB checkpoints on every tool call/result
-- supports custom retry and fallback behavior per tool error
+---
 
-3. Current implementation status:
-- implemented partial manual control (explicit per-step loop + single-step generation + DB persistence + emergency-stop interrupt)
-- next step to become fully manual: remove `execute` from tool definitions in loop mode and dispatch tool calls in orchestrator reducer.
+## Part 2 — Server: AI SDK Streaming (implemented)
 
-## 20) Latest Cleanup Applied (March 2, 2026)
-1. Removed depth-map wiring from the active path:
-- deleted `apps/server/src/services/depth.ts` (unused)
-- removed depth references from robot context/examples prompts
+Current state: **complete**. Architecture uses:
+- `POST /v1/chat` → `streamText` + `createUIMessageStreamResponse` + Redis resumable streams
+- `GET /v1/chat/:id/stream` → resume interrupted stream (204 if none)
+- `GET /v1/chat/:id` → read chat (returns messages + title)
+- `GET /v1/chat` → list all chats
+- `prepareStep` → injects fresh camera frame as `image` part before each AI step
+- `sanitizeToolImageMessages` → extracts snapshot data URLs from tool results, re-injects as user image parts
+- Error handling, structured logging (`pino`), Redis resumable stream context
 
-2. Replaced custom stop-request plumbing:
-- removed `requestSessionStop` route usage
-- added `abortSession(sessionId)` in `services/orchestrator.ts`
-- `runSession` now passes `abortSignal` to `streamText`, and handles aborts as graceful `stopped`
+### Remaining server work
+- [ ] Restore modular prompt structure (`src/lib/prompts/robot/`) from origin/main
+- [ ] Update `system.ts` to compose from modular prompts
+- [ ] Validate `toModelOutput` tool approach vs current `sanitizeToolImageMessages` workaround (GitHub issue #8209 confirms manual sanitize IS the correct approach for now)
 
-3. Simplified step event contract to avoid invalid UI types:
-- server step event emits only AI SDK tool-call fields (`toolName`, `toolCallId`, `input`)
-- web API/types updated to match server payload
-- session UI now renders per-tool detail components from `input` only (no `action`/`movementSnapshots` coupling)
+---
 
-4. Reduced tool execution payloads:
-- removed `movementSnapshots` collection from `forward` / `backward` / `turn`
-- removed synthetic `action` fields from tool outputs (`forward` / `backward` / `turn` / `stop`)
+## Part 3 — Web: UI Cleanup (partially implemented)
 
-## 19) Concrete Reference Mapping (Cloned Locally)
-All of these repos are cloned under `/home/node/boost/.refs`.
+### Implemented
+- `task` search param (renamed from `message`)
+- `toolCallCount` removed
+- Header title → home link (no back button)
+- Session layout centred (`max-w-5xl`)
+- Camera feed → React Query HEAD poll + timestamp cache-busting
+- `sessions.tsx` → relative time, status badges
+- Backend cleanup: try/catch, structured logging, `onError` fix
 
-### 19.1 `ai-chatbot` patterns to mirror
-1. `app/(chat)/api/chat/route.ts`
-- Uses `createUIMessageStream` + `createUIMessageStreamResponse`.
-- Uses `consumeSseStream` with `createResumableStreamContext` and Redis.
-- Persists message parts on `onFinish`.
-- Merges custom `data-*` parts into the stream (we should do this for robot step telemetry).
+### Remaining web work
+- [ ] Re-add shadcn components (`bunx shadcn@latest add ...`)
+- [ ] Status panel full height
+- [ ] TanStack Query usage audit vs better-t-stack patterns
+- [ ] Remove remaining `useEffect` where replaceable with React Query
 
-2. `components/chat.tsx`
-- Uses `useChat` + `DefaultChatTransport`.
-- Custom `prepareSendMessagesRequest` sends either last user message or full message sequence depending on tool approval flow.
-- Integrates `resumeStream`.
+---
 
-3. `hooks/use-auto-resume.ts`
-- Auto-resume logic: if latest initial message is user, call `resumeStream()` on mount.
+## Part 4 — TanStack Query Patterns (from better-t-stack)
 
-4. `lib/db/schema.ts` + `lib/db/queries.ts`
-- Dedicated `Stream` table and helpers (`createStreamId`, `getStreamIdsByChatId`).
-- Message parts persisted as structured JSON (`parts`).
+better-t-stack reference at `/tmp/my-better-t-app` uses:
+- `queryClient.invalidateQueries` after mutations (not manual state updates)
+- `useQuery` with `staleTime: 1000 * 60 * 5` for stable data
+- `useMutation` wrapping POST calls
+- No `useEffect` for data fetching — all replaced by `useQuery`/`useMutation`
 
-### 19.2 `ai-sdk-persistence-db` patterns to mirror
-1. `app/chat/[id]/chat.tsx`
-- Minimal `useChat` persistence transport shape.
-- Sends only latest message and chat id; server rehydrates full context.
-- Useful as the lean baseline before adding advanced tool/telemetry behavior.
+Current violations in our web app:
+- `status-panel.tsx`: `useQuery` for hub state — check `refetchInterval` and `staleTime` config
+- Any remaining `useEffect` + `fetch` patterns should become `useQuery`
 
-### 19.3 `ai` repo examples/docs to mirror
-1. `examples/next/app/api/chat/route.ts` and `examples/next/app/api/chat/[id]/stream/route.ts`
-- Canonical resumable stream POST/GET flow.
+---
 
-2. `content/docs/04-ai-sdk-ui/03-chatbot-resume-streams.mdx`
-- Canonical resumability architecture and lifecycle.
+## Part 5 — Camera / Snapshot (implemented)
 
-3. `content/docs/03-ai-sdk-core/40-middleware.mdx`
-- Canonical middleware composition and `wrapLanguageModel` usage.
+- iPhone Larix → RTMP → MediaMTX → ffmpeg writes `/tmp/boost-snapshot.jpg` every 2s
+- `GET /v1/snapshot` → reads file, returns `image/jpeg`
+- `CameraFeed` polls via HEAD every 2s using `useQuery`, cache-busts `src` with timestamp
+
+---
+
+## Part 6 — Open Issues / Backlog
+
+| Priority | Issue | Notes |
+|---|---|---|
+| P0 | ~~EV3 hub rewrite~~ | ✅ Done — ev3-dc, R3PTAR port layout |
+| P0 | Calibrate `_DRIVE_DEG_PER_CM` | Run `forward(10)`, measure actual travel, adjust constant |
+| P0 | Calibrate `_STEER_DEG_PER_HEADING_DEG` | Run `turn(90)`, measure actual heading change, adjust |
+| P0 | Pair EV3 via `bluetoothctl` on Pi | One-time setup, set `EV3_MAC` in `.env` |
+| P1 | Restore robot prompts | Copy from `origin/main` `src/lib/prompts/robot/` |
+| P1 | shadcn reinstall | `bunx shadcn@latest add button card ...` |
+| P2 | Status panel full height | CSS tweak |
+| P2 | TanStack Query audit | Remove stale `useEffect` patterns |
+| P3 | `toModelOutput` evaluation | Track AI SDK issue #8209 — current workaround is correct |
+| P3 | Pybricks evaluation | Alternative EV3 firmware with cleaner Python API if ev3-dc has issues |

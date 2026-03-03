@@ -1,243 +1,131 @@
 import logging
-import math
 import os
-import queue
 import threading
 import time
 from typing import Any
 
-from pylgbst import get_connection_bleak
-from pylgbst.hub import MoveHub, VisionSensor
-from pylgbst.messages import MsgGenericError
+import ev3_dc as ev3
 
 from .models import ExecuteMotionCommand
 from .safety import Watchdog
 
 logger = logging.getLogger(__name__)
 
-_MOTOR_DEG_PER_CM = 20.5  # encoder degrees per cm of linear travel (56 mm wheel)
-_WHEEL_TRACK_CM = 11.0  # distance between wheel contact points (centre-to-centre)
-_BATTERY_MAX_VOLTS = 9.6  # 6×AA alkaline full charge (~1.6 V/cell)
-_SEND_TIMEOUT_S = 15.0
+_PORT_DRIVE  = ev3.PORT_B
+_PORT_STEER  = ev3.PORT_A
+_PORT_STRIKE = ev3.PORT_D
+_PORT_IR     = ev3.PORT_4
 
+_DRIVE_DEG_PER_CM: float = 36.0
+_STEER_DEG_PER_HEADING_DEG: float = 3.0
 
-def _patch_hub_send(hub: MoveHub) -> None:
-    """
-    Monkey-patch Hub.send() to add a reply timeout and prevent infinite hangs.
-
-    pylgbst's Hub.send() calls self._sync_replies.get() with no timeout.  If the
-    hub disconnects or a motor stalls the calling thread blocks permanently.  We
-    replace the method on the *instance* so the rest of the library is untouched.
-    """
-
-    def send_with_timeout(msg: Any) -> Any:  # noqa: ANN401
-        log = logging.getLogger("pylgbst.hub")
-        log.debug("Send message (patched): %r", msg)
-        msgbytes = msg.bytes()
-        if msg.needs_reply:
-            with hub._sync_lock:  # noqa: SLF001
-                assert not hub._sync_request, (  # noqa: SLF001
-                    "Pending request %r while trying to put %r" % (hub._sync_request, msg)  # noqa: SLF001
-                )
-                hub._sync_request = msg  # noqa: SLF001
-                log.debug("Waiting for sync reply to %r...", msg)
-
-            hub.connection.write(hub.HUB_HARDWARE_HANDLE, msgbytes)
-            try:
-                resp = hub._sync_replies.get(timeout=_SEND_TIMEOUT_S)  # noqa: SLF001
-            except queue.Empty:
-                # Timed out — clear stale sync state under the lock so _notify()
-                # doesn't try to put() into an already-drained queue later.
-                with hub._sync_lock:  # noqa: SLF001
-                    hub._sync_request = None  # noqa: SLF001
-                raise TimeoutError(f"No reply from hub within {_SEND_TIMEOUT_S}s for {msg!r}")
-            log.debug("Fetched sync reply: %r", resp)
-            if isinstance(resp, MsgGenericError):
-                raise RuntimeError(resp.message())
-            return resp
-        else:
-            hub.connection.write(hub.HUB_HARDWARE_HANDLE, msgbytes)
-            return None
-
-    hub.send = send_with_timeout  # type: ignore[method-assign]
-
-
-def _clear_sync_state(hub: MoveHub) -> None:
-    """
-    Safely reset pylgbst's sync-request state.
-
-    Must be called while holding _execute_lock so no other motor command is
-    in-flight.  Acquires _sync_lock internally to avoid racing with _notify().
-    Drains _sync_replies so the queue never stays full.
-    """
-    with hub._sync_lock:  # noqa: SLF001
-        hub._sync_request = None  # noqa: SLF001
-        # Drain any stale reply so Queue(1) doesn't block _notify() next time
-        try:
-            hub._sync_replies.get_nowait()  # noqa: SLF001
-        except queue.Empty:
-            pass
+_CONNECT_RETRY_S: float = 5.0
 
 
 class HubService:
     def __init__(self) -> None:
         self.connected = False
-        self._hub: MoveHub | None = None
-        self._mac: str | None = os.getenv("HUB_MAC") or None
-        self._stop = False
+        self._brick: ev3.EV3 | None = None
+        self._drive: ev3.Motor | None = None
+        self._steer: ev3.Motor | None = None
+        self._strike: ev3.Motor | None = None
+        self._ir: ev3.Infrared | None = None
+        self._mac: str | None = os.getenv("EV3_MAC") or os.getenv("HUB_MAC")
+        self._stop_flag = False
         self.watchdog = Watchdog(timeout_s=5.0)
-        self._distance: float | None = None
-        # Dead-reckoning pose (origin = position at connect time)
-        self._x: float = 0.0  # metres, positive = forward from start
-        self._y: float = 0.0  # metres, positive = left from start
-        self._heading: float = 0.0  # degrees, 0 = forward, +90 = left, -90 = right
-        # Serialise motor commands — prevents concurrent Hub.send() calls from
-        # triggering the "Pending request" assertion in pylgbst.
         self._execute_lock = threading.Lock()
 
     def connect(self) -> None:
-        """Blocking BLE connect with retry, runs in a thread."""
-        label = f"[{self._mac}]" if self._mac else '(name="Move Hub")'
         attempt = 0
-        while not self._stop:
+        while not self._stop_flag:
             attempt += 1
-            logger.info("Connecting to LEGO Boost hub %s (attempt %d) …", label, attempt)
+            label = self._mac or "(auto-discover)"
+            logger.info("Connecting to EV3 %s (attempt %d)…", label, attempt)
             try:
-                conn = get_connection_bleak(
-                    hub_mac=self._mac,
-                    hub_name=None if self._mac else "Move Hub",
-                )
-                hub = MoveHub(conn)
-                if self._stop:
-                    try:
-                        hub.disconnect()
-                    except Exception:
-                        pass
-                    return
-
-                _patch_hub_send(hub)
-                self._hub = hub
+                brick = ev3.EV3(protocol=ev3.BLUETOOTH, host=self._mac)
+                self._brick  = brick
+                self._drive  = ev3.Motor(_PORT_DRIVE,  ev3_obj=brick)
+                self._steer  = ev3.Motor(_PORT_STEER,  ev3_obj=brick)
+                self._strike = ev3.Motor(_PORT_STRIKE, ev3_obj=brick)
+                try:
+                    self._ir = ev3.Infrared(_PORT_IR, ev3_obj=brick)
+                except Exception as ir_exc:
+                    logger.warning("IR sensor not available at PORT_4: %s", ir_exc)
+                    self._ir = None
                 self.connected = True
-                self._attach_distance_sensor()
-                logger.info("Connected to LEGO Boost hub %s", label)
+                logger.info("Connected to EV3 %s", label)
                 return
             except Exception as exc:
-                logger.error("BLE connect failed: %s — retrying in 5s", exc)
+                logger.error("EV3 connect failed: %s — retrying in %.0fs", exc, _CONNECT_RETRY_S)
                 self.connected = False
-                self._hub = None
-                time.sleep(5)
+                self._brick = None
+                time.sleep(_CONNECT_RETRY_S)
 
     def disconnect(self) -> None:
-        self._stop = True
-        if self._hub:
+        self._stop_flag = True
+        self.connected = False
+        if self._brick is not None:
             try:
-                self._hub.disconnect()
+                self._brick.__exit__(None, None, None)
             except Exception:
                 pass
-        self.connected = False
-        self._hub = None
-        logger.info("Disconnected from LEGO Boost hub")
+        self._brick = None
+        logger.info("Disconnected from EV3")
 
     def state(self) -> dict[str, Any]:
-        battery: int | None = None
-        if self._hub is not None and self._hub.voltage is not None:
+        distance: float | None = None
+        battery: float | None = None
+        if self._ir is not None:
             try:
-                volts = self._hub.voltage.voltage
-                battery = max(0, min(100, round(volts / _BATTERY_MAX_VOLTS * 100)))
+                distance = float(self._ir.distance)
             except Exception:
                 pass
-        return {
-            "connected": self.connected,
-            "distance": self._distance,
-            "battery": battery,
-            "pose": {
-                "x": round(self._x, 3),
-                "y": round(self._y, 3),
-                "heading": round(self._heading, 1),
-            },
-        }
+        if self._brick is not None:
+            try:
+                battery = float(self._brick.battery.voltage)
+            except Exception:
+                pass
+        return {"connected": self.connected, "distance": distance, "battery": battery}
 
     def execute(self, payload: ExecuteMotionCommand) -> dict[str, Any]:
-        if not self.connected or self._hub is None:
-            return self._err("hub_not_connected")
-
+        if not self.connected or self._brick is None:
+            return self._err("ev3_not_connected")
         with self._execute_lock:
             return self._execute_inner(payload)
 
     def _execute_inner(self, payload: ExecuteMotionCommand) -> dict[str, Any]:
-        """Run a single motor command.  Called while _execute_lock is held."""
-        hub = self._hub
-        if hub is None:
-            return self._err("hub_not_connected")
-
-        action = payload.action
-        speed = self._normalized_speed(payload.speed)
-
-        def _run() -> None:
-            if action == "stop":
-                hub.motor_AB.stop()
-
-            elif action == "forward_cm":
-                dist = max(5.0, min(1000.0, payload.value))
-                motor_deg = int(round(dist * _MOTOR_DEG_PER_CM))
-                logger.info("forward %.1f cm → %d motor° @ speed=%.2f", dist, motor_deg, speed)
-                hub.motor_AB.angled(motor_deg, speed, speed, wait_complete=True)
-                self._accumulate_linear(dist / 100.0)
-
-            elif action == "backward_cm":
-                dist = max(5.0, min(1000.0, payload.value))
-                motor_deg = int(round(dist * _MOTOR_DEG_PER_CM))
-                logger.info("backward %.1f cm → %d motor° @ speed=%.2f", dist, motor_deg, speed)
-                hub.motor_AB.angled(motor_deg, -speed, -speed, wait_complete=True)
-                self._accumulate_linear(-dist / 100.0)
-
-            elif action == "turn_deg":
-                deg = max(-180.0, min(180.0, payload.value))
-                arc_cm = (abs(deg) / 360.0) * math.pi * _WHEEL_TRACK_CM
-                motor_deg = int(round(arc_cm * _MOTOR_DEG_PER_CM))
-                direction = 1.0 if deg >= 0 else -1.0
-                logger.info(
-                    "turn %.1f° → arc=%.2f cm, %d motor° @ speed=%.2f",
-                    deg,
-                    arc_cm,
-                    motor_deg,
-                    speed,
-                )
-                hub.motor_AB.angled(
-                    motor_deg,
-                    direction * speed,
-                    -direction * speed,
-                    wait_complete=True,
-                )
-                self._accumulate_turn(deg)
-
-            else:
-                raise ValueError(f"unknown_action: {action}")
+        action    = payload.action
+        speed_pct = max(5, min(100, int(round(payload.speed * 100))))
 
         try:
-            _run()
-        except AssertionError as exc:
-            # pylgbst "Pending request" — stale _sync_request from a previous
-            # command whose reply arrived late or was lost.  Clear it safely
-            # (under _sync_lock, queue drained) then retry once.
-            logger.warning(
-                "pylgbst pending-request deadlock (%s) — clearing sync state and retrying", exc
-            )
-            _clear_sync_state(hub)
-            try:
-                _run()
-            except Exception as retry_exc:
-                logger.error("Motor command failed after retry: %s", retry_exc)
-                return self._err(str(retry_exc))
-        except TimeoutError as exc:
-            # Hub stopped replying (BLE drop or motor stall).  State is already
-            # cleaned up inside send_with_timeout; just report the failure.
-            logger.error("Motor command timed out: %s", exc)
-            return self._err(str(exc))
-        except ValueError as exc:
-            return self._err(str(exc))
+            if action == "stop":
+                self._drive.stop()
+                self._steer.stop()
+                logger.info("stop")
+
+            elif action == "forward_cm":
+                dist_cm = max(5.0, min(300.0, payload.value))
+                degrees = int(round(dist_cm * _DRIVE_DEG_PER_CM))
+                logger.info("forward %.1f cm → %d° @ %d%%", dist_cm, degrees, speed_pct)
+                self._drive.move_by(degrees, speed=speed_pct, brake=True).start(thread=False)
+
+            elif action == "backward_cm":
+                dist_cm = max(5.0, min(300.0, payload.value))
+                degrees = int(round(dist_cm * _DRIVE_DEG_PER_CM))
+                logger.info("backward %.1f cm → %d° @ %d%%", dist_cm, degrees, speed_pct)
+                self._drive.move_by(-degrees, speed=speed_pct, brake=True).start(thread=False)
+
+            elif action == "turn_deg":
+                deg = max(-90.0, min(90.0, payload.value))
+                motor_deg = int(round(deg * _STEER_DEG_PER_HEADING_DEG))
+                logger.info("turn %.1f° → %d motor° @ %d%%", deg, motor_deg, speed_pct)
+                self._steer.move_by(motor_deg, speed=speed_pct, brake=True).start(thread=False)
+
+            else:
+                return self._err(f"unknown_action: {action}")
+
         except Exception as exc:
-            logger.error("Motor command failed: %s", exc)
+            logger.error("EV3 command failed: %s", exc)
             return self._err(str(exc))
 
         self.watchdog.pet()
@@ -249,87 +137,26 @@ class HubService:
         )
 
     def emergency_stop(self) -> dict[str, Any]:
-        if self._hub:
-            try:
-                self._hub.motor_AB.stop()
-                logger.warning("Emergency stop executed")
-            except Exception as exc:
-                logger.error("Emergency stop failed: %s", exc)
+        errors: list[str] = []
+        for name, motor in [("drive", self._drive), ("steer", self._steer), ("strike", self._strike)]:
+            if motor is not None:
+                try:
+                    motor.stop()
+                except Exception as exc:
+                    errors.append(f"{name}: {exc}")
+        if errors:
+            logger.error("Emergency stop partial failure: %s", "; ".join(errors))
+        else:
+            logger.warning("Emergency stop executed")
         self.watchdog.pet()
-        return self._ok("emergency-stop")
-
-    def _accumulate_linear(self, dist_m: float) -> None:
-        """Integrate a linear movement into x/y using current heading."""
-        rad = math.radians(self._heading)
-        self._x += dist_m * math.cos(rad)
-        self._y += dist_m * math.sin(rad)
-
-    def _accumulate_turn(self, deg: float) -> None:
-        """Integrate a turn into heading. Positive = clockwise = heading decreases (right)."""
-        self._heading = (self._heading - deg) % 360
-        if self._heading > 180:
-            self._heading -= 360
+        return {"ok": not errors, "data": {"action": "emergency-stop"}, "error": "; ".join(errors) or None}
 
     def _ok(self, action: str, payload: ExecuteMotionCommand | None = None) -> dict[str, Any]:
         return {
             "ok": True,
-            "data": {
-                "action": action,
-                "payload": payload.model_dump() if payload else None,
-                "pose": {
-                    "x": round(self._x, 3),
-                    "y": round(self._y, 3),
-                    "heading": round(self._heading, 1),
-                },
-            },
+            "data": {"action": action, "payload": payload.model_dump() if payload else None},
             "error": None,
         }
 
     def _err(self, msg: str) -> dict[str, Any]:
         return {"ok": False, "data": None, "error": msg}
-
-    def _attach_distance_sensor(self) -> None:
-        if self._hub is None:
-            return
-
-        sensor = getattr(self._hub, "vision_sensor", None) or getattr(
-            self._hub, "color_distance_sensor", None
-        )
-        if sensor is None:
-            logger.warning("Distance sensor not available on this hub")
-            return
-
-        try:
-            sensor.subscribe(self._on_color_distance_update, mode=VisionSensor.COLOR_DISTANCE_FLOAT)
-            cached_distance_inches = getattr(sensor, "distance", None)
-            if isinstance(cached_distance_inches, (int, float)):
-                self._update_distance_cm(float(cached_distance_inches))
-            logger.info("Distance sensor subscribed (mode=COLOR_DISTANCE_FLOAT)")
-        except Exception as exc:
-            logger.warning("Distance sensor subscribe failed: %s", exc)
-
-    def _on_color_distance_update(self, *values: Any) -> None:
-        if not values:
-            return
-
-        distance_inches: float | None = None
-        if len(values) >= 2 and isinstance(values[1], (int, float)):
-            distance_inches = float(values[1])
-        elif isinstance(values[0], (int, float)):
-            distance_inches = float(values[0])
-
-        if distance_inches is None:
-            return
-
-        if distance_inches >= 255:
-            return
-
-        self._update_distance_cm(distance_inches)
-
-    def _update_distance_cm(self, distance_inches: float) -> None:
-        if distance_inches < 0:
-            return
-        self._distance = round(distance_inches * 2.54, 1)
-
-    def _normalized_speed(self, speed: float) -> float:
-        return max(0.05, min(1.0, abs(speed)))
