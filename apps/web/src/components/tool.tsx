@@ -2,9 +2,11 @@ import {
   ArrowDown,
   ArrowUp,
   Flag,
+  MapPin,
   OctagonX,
   RotateCw,
   Wrench,
+  Zap,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { asNumber, asRecord, asString, formatValue } from "@/lib/utils";
@@ -145,6 +147,51 @@ function CompleteTool({ tool }: { tool: ToolRenderModel }) {
   );
 }
 
+function StrikeTool({ tool }: { tool: ToolRenderModel }) {
+  const input = asRecord(tool.input);
+  const output = asRecord(tool.output);
+  const duration = asNumber(input?.value);
+  const reason = asString(input?.text);
+  const snapshot = asString(output?.snapshot) ?? undefined;
+
+  return (
+    <ToolFrame
+      icon={<Zap className="size-3.5" />}
+      snapshot={snapshot}
+      title="Strike"
+    >
+      <p className="text-muted-foreground text-xs">
+        {duration !== null ? `jaw open ${duration}s` : ""}
+      </p>
+      <p className="mt-1 whitespace-pre-wrap text-sm">
+        {reason ?? "No decision text provided."}
+      </p>
+    </ToolFrame>
+  );
+}
+
+function GetPoseTool({ tool }: { tool: ToolRenderModel }) {
+  const output = asRecord(tool.output);
+  const pose = asRecord(output?.pose);
+  const x = asNumber(pose?.x);
+  const y = asNumber(pose?.y);
+  const heading = asNumber(pose?.heading);
+
+  return (
+    <ToolFrame icon={<MapPin className="size-3.5" />} title="Get Pose">
+      {pose !== null ? (
+        <p className="text-muted-foreground text-xs">
+          {x !== null ? `x: ${x.toFixed(2)} m` : ""}
+          {y !== null ? `  y: ${y.toFixed(2)} m` : ""}
+          {heading !== null ? `  heading: ${heading.toFixed(1)}°` : ""}
+        </p>
+      ) : (
+        <p className="text-muted-foreground text-xs">Pose unavailable</p>
+      )}
+    </ToolFrame>
+  );
+}
+
 function UnknownTool({ tool }: { tool: ToolRenderModel }) {
   return (
     <ToolFrame icon={<Wrench className="size-3.5" />} title={tool.toolName}>
@@ -166,6 +213,10 @@ export function Tool({ tool }: { tool: ToolRenderModel }) {
       return <StopTool tool={tool} />;
     case "complete":
       return <CompleteTool tool={tool} />;
+    case "strike":
+      return <StrikeTool tool={tool} />;
+    case "getPose":
+      return <GetPoseTool tool={tool} />;
     default:
       return <UnknownTool tool={tool} />;
   }

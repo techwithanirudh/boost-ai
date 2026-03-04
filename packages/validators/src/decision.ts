@@ -32,7 +32,7 @@ const turnSchema = z.object({
   action: z.literal("turn_deg"),
   value: z.preprocess(
     (value) =>
-      typeof value === "number" ? Math.max(-3.0, Math.min(3.0, value)) : value,
+      typeof value === "number" ? Math.max(-120, Math.min(120, value)) : value,
     z.number()
   ),
   speed: speedSchema,

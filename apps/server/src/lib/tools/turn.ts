@@ -8,14 +8,14 @@ const log = createLogger("tool:turn");
 
 export const turnTool = tool({
   description:
-    "Curve the snake by deflecting its head and crawling forward simultaneously. Positive values curve right, negative values curve left. Value is duration in seconds (0.2–3.0). Longer = more total turn.",
+    "Set the snake's heading (steer motor) to an absolute position and hold it. 0 = straight, positive = right, negative = left. Range: -120 to +120. Does NOT drive — call forward/backward separately, then call turn(0) to re-center once the desired distance is traveled.",
   inputSchema: z.object({
     value: z
       .number()
-      .min(-3.0)
-      .max(3.0)
+      .min(-120)
+      .max(120)
       .describe(
-        "Curve duration in seconds. Negative = left, positive = right. Range: -3.0 to +3.0."
+        "Absolute heading position in degrees (steer motor). 0 = center/straight. Max deflection is ±120. Positive = right, negative = left."
       ),
     text: z
       .string()
@@ -24,8 +24,7 @@ export const turnTool = tool({
       .describe("Brief rationale for this decision (shown in logs)."),
   }),
   execute: async ({ value, text }) => {
-    const dir = value >= 0 ? "right" : "left";
-    log.info({ value, text }, `turn ${Math.abs(value)}s ${dir}`);
+    log.info({ value, text }, `steer → ${value}°`);
 
     const result = await hub.executeAction({
       action: "turn_deg",

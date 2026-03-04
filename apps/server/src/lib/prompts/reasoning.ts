@@ -25,9 +25,9 @@ Stuck policy:
 - A motor command timeout, or no response ALWAYS means the robot is physically stuck: wedged, high-centred, or on uneven ground.
 - This is a normal game obstacle. Do NOT stop. Execute the escape sequence:
   1. ALWAYS back up, 1m+.
-  2. Turn 30-45° in either direction.
+  2. Turn 60-90° in either direction.
   3. Retry forward, with 1.0 speed minimum from the new angle, 
-  4. If still stuck, try a larger turn (90°) and a completely different approach direction.
+  4. If still stuck, try a larger turn (120°) and a completely different approach direction.
   5. Only call stop after 4-5 full failed escape attempts with zero movement each time.
 
 Error policy:

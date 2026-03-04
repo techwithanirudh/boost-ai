@@ -24,12 +24,17 @@ export const toolsPrompt = `\
 
 <tool>
   <name>turn</name>
-  <description>Curve the snake by deflecting its head and crawling forward simultaneously.</description>
+  <description>
+    Set the heading (steer motor) to an absolute position and hold it. Does NOT move the robot.
+    0 = straight ahead (center). Positive = right. Negative = left. Range: -120 to +120.
+    Values are absolute, not cumulative. turn(0) always re-centers to straight.
+  </description>
   <when>
-    Path is blocked and a turn will reveal a better route, or a course correction is needed.
-    Value is duration in seconds (negative = left, positive = right): 0.5s = slight curve, 1.5s = moderate turn, 3.0s = sharp turn.
-    After backing out of a stuck situation, use 1.0–1.5s turn before retrying forward.
-    For scanning and visual search, use short 0.5s turns.
+    Use before forward/backward to set the snake's heading.
+    Typical sequence: turn(+30) → forward(X) → turn(0) to re-center once the desired distance is traveled.
+    Call turn(0) any time you need to reset to straight before a new maneuver.
+    Never call turn more than once in the same direction without re-centering, the motor
+    will hit the physical stop at ±120 and stall.
   </when>
 </tool>
 
@@ -51,6 +56,15 @@ export const toolsPrompt = `\
     Calling complete because you can see the goal from a distance is a mission failure.
   </description>
   <when>You are physically at the goal and the current frame clearly confirms it. NEVER before.</when>
+</tool>
+
+<tool>
+  <name>strike</name>
+  <description>Open the R3PTAR jaw (strike/bite animation) for a specified duration, then snap shut.</description>
+  <when>
+    Target is within striking range and a bite/threat display is appropriate.
+    Default duration 0.5 s is sufficient for most situations.
+  </when>
 </tool>
 
 <tool>

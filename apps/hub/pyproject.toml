@@ -21,6 +21,7 @@ httpx = "^0.27.0"
 ruff = "^0.8.0"
 
 [tool.poe.tasks]
+build = { shell = "echo 'hub: nothing to build'" }
 dev   = "uvicorn main:app --reload --host 0.0.0.0 --port 8000 --loop asyncio"
 start = "uvicorn main:app --host 0.0.0.0 --port 8000 --loop asyncio"
 test  = "pytest tests/ -v"

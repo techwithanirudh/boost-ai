@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "postinstall": "poetry install",
+    "postinstall": "poetry install --with dev",
     "build": "poetry run poe build",
     "dev": "poetry run poe dev",
     "test": "poetry run poe test",
