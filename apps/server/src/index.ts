@@ -1,4 +1,4 @@
-import { env } from "@boost/env/server";
+import { env } from "@ev3/env/server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";

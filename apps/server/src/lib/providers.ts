@@ -1,5 +1,5 @@
 import { createOpenAI } from "@ai-sdk/openai";
-import { env } from "@boost/env/server";
+import { env } from "@ev3/env/server";
 import { customProvider, type Provider } from "ai";
 
 const openai = createOpenAI({

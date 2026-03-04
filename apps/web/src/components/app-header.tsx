@@ -11,7 +11,7 @@ export function AppHeader() {
           to="/"
         >
           <Bot className="size-5 shrink-0 text-primary" />
-          <p className="truncate font-semibold text-sm">Boost AI</p>
+          <p className="truncate font-semibold text-sm">EV3 AI</p>
         </Link>
 
         <div className="ml-auto">

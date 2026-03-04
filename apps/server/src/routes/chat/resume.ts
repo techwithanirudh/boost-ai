@@ -1,4 +1,4 @@
-import { readChat, saveChat } from "@boost/db/queries/chats";
+import { readChat, saveChat } from "@ev3/db/queries/chats";
 import { UI_MESSAGE_STREAM_HEADERS } from "ai";
 import { createLogger } from "@/lib/logger";
 import { getResumableStreamContext } from "@/lib/resume-stream";

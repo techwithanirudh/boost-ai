@@ -1,4 +1,4 @@
-import { env } from "@boost/env/server";
+import { env } from "@ev3/env/server";
 import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
 import { chats } from "./schema";

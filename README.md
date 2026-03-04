@@ -1,4 +1,4 @@
-# Boost
+# EV3
 
 Autonomous LEGO Mindstorms EV3 robot controlled by a multimodal AI agent running on a Raspberry Pi.
 
@@ -63,7 +63,7 @@ curl -sSL https://install.python-poetry.org | python3 -
 ### 3. Clone and install
 
 ```bash
-git clone <repo-url> boost && cd boost
+git clone <repo-url> ev3 && cd ev3
 bun install
 cd apps/hub && poetry install && cd ../..
 ```
@@ -173,7 +173,7 @@ MediaMTX runs an ffmpeg process that writes `/tmp/snapshot.jpg` at 1 fps. The se
 ## Project structure
 
 ```
-boost/
+ev3/
 ├── apps/
 │   ├── server/src/
 │   │   ├── lib/

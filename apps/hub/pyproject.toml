@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "hub"
 version = "0.1.0"
-description = "LEGO Boost BLE control plane."
+description = "LEGO EV3 control plane."
 authors = ["Anirudh Sriram <techwithanirudh@gmail.com>"]
 package-mode = false
 

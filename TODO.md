@@ -9,8 +9,8 @@ Add depth map as a second image part in the AI user message.
 - Use tanstack query for calling APIs, and use heyapi for hub logic... re-add all shadcn components
 
 - The loading skeleton for AI Chat is irritating
-- If the health status for boost is unhealthy block the whole app-ish becausew whole app rlies on boost
-- If boost is disconnected again, always reconnect, indicdate in api tooand frontend
+- If the health status for ev3 is unhealthy block the whole app-ish becausew whole app rlies on ev3
+- If ev3 is disconnected again, always reconnect, indicdate in api tooand frontend
 - The title code is cluttered / cursed
 - Inject movement map (6 images)
 - Take tool snapshot at final, not half way for tools

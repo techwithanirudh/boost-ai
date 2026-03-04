@@ -1,5 +1,5 @@
 {
-  "name": "@boost/db",
+  "name": "@ev3/db",
   "type": "module",
   "exports": {
     ".": {
@@ -25,8 +25,8 @@
     "db:migrate": "drizzle-kit migrate"
   },
   "dependencies": {
-    "@boost/env": "workspace:*",
-    "@boost/validators": "workspace:*",
+    "@ev3/env": "workspace:*",
+    "@ev3/validators": "workspace:*",
     "@neondatabase/serverless": "^1.0.2",
     "ai": "^6.0.105",
     "dotenv": "catalog:",
@@ -34,7 +34,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@boost/config": "workspace:*",
+    "@ev3/config": "workspace:*",
     "drizzle-kit": "^0.31.8",
     "typescript": "catalog:"
   }

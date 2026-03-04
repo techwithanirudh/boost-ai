@@ -1,5 +1,5 @@
 {
-  "name": "@boost/env",
+  "name": "@ev3/env",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -12,7 +12,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@boost/config": "workspace:*",
+    "@ev3/config": "workspace:*",
     "@types/bun": "catalog:",
     "typescript": "catalog:"
   }

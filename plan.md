@@ -1,4 +1,4 @@
-# Boost Robot — Master Plan
+# EV3 Robot — Master Plan
 
 ---
 
@@ -64,14 +64,14 @@ USB-A cable: Pi → EV3 for power + USB networking (192.168.2.1 fixed IP).
 
 ### 1.1 Decision
 
-Switch from LEGO Boost (`pylgbst` + BLE) to **LEGO Mindstorms EV3** using
+Switch from the legacy BLE stack (`pylgbst`) to **LEGO Mindstorms EV3** using
 **[ev3-dc](https://pypi.org/project/ev3-dc/)** (`ev3_dc`).
 
-| | LEGO Boost (old) | LEGO EV3 (new) |
+| | Legacy BLE stack | LEGO EV3 (new) |
 |---|---|---|
 | Library | `pylgbst` + `bleak` | `ev3-dc` |
 | Protocol | BLE (Bluetooth Low Energy) | Bluetooth Classic serial / USB |
-| Firmware | Proprietary LEGO Boost | Stock EV3 firmware (no flash needed) |
+| Firmware | Proprietary BLE hub | Stock EV3 firmware (no flash needed) |
 | Where server runs | Pi | Pi (unchanged) |
 | Connection | BLE auto-discovery | Bluetooth serial (paired MAC) |
 | Motor API | `hub.motor_AB.angled(deg, spd_L, spd_R)` | `vehicle.drive_straight(m)` / `drive_turn(deg, radius)` |
@@ -335,7 +335,7 @@ Current violations in our web app:
 
 ## Part 5 — Camera / Snapshot (implemented)
 
-- iPhone Larix → RTMP → MediaMTX → ffmpeg writes `/tmp/boost-snapshot.jpg` every 2s
+- iPhone Larix → RTMP → MediaMTX → ffmpeg writes `/tmp/ev3-snapshot.jpg` every 2s
 - `GET /v1/snapshot` → reads file, returns `image/jpeg`
 - `CameraFeed` polls via HEAD every 2s using `useQuery`, cache-busts `src` with timestamp
 

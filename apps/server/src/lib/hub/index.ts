@@ -1,5 +1,5 @@
-import { env } from "@boost/env/server";
-import type { ActionDecision } from "@boost/validators";
+import { env } from "@ev3/env/server";
+import type { ActionDecision } from "@ev3/validators";
 import ky, { HTTPError, type KyInstance } from "ky";
 
 // ---------------------------------------------------------------------------

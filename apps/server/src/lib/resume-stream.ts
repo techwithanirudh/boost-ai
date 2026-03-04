@@ -1,4 +1,4 @@
-import { env } from "@boost/env/server";
+import { env } from "@ev3/env/server";
 import Redis from "ioredis";
 import {
   createResumableStreamContext,
@@ -29,7 +29,7 @@ export function getResumableStreamContext(): ResumableStreamContext | null {
     );
 
     streamContext = createResumableStreamContext({
-      keyPrefix: "boost-session",
+      keyPrefix: "ev3-session",
       publisher,
       subscriber,
       waitUntil: (promise) => {

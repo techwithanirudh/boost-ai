@@ -1,5 +1,5 @@
-import { config } from "@boost/config";
-import { readChat, saveChat } from "@boost/db/queries/chats";
+import { config } from "@ev3/config";
+import { readChat, saveChat } from "@ev3/db/queries/chats";
 import {
   convertToModelMessages,
   createUIMessageStream,

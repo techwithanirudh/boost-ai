@@ -1,5 +1,5 @@
 {
-  "name": "@boost/validators",
+  "name": "@ev3/validators",
   "type": "module",
   "exports": {
     ".": {
@@ -13,7 +13,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@boost/config": "workspace:*",
+    "@ev3/config": "workspace:*",
     "typescript": "catalog:"
   }
 }

@@ -7,7 +7,7 @@ const log = createLogger("tool:get-health");
 
 export const getHealthTool = tool({
   description:
-    "Check connectivity and health of the LEGO Boost hub. Call this when the hub may be offline or when a previous action returned an error.",
+    "Check connectivity and health of the LEGO EV3 hub. Call this when the hub may be offline or when a previous action returned an error.",
   inputSchema: z.object({}),
   execute: async () => {
     const result = await hub.getHealth();

@@ -1,4 +1,4 @@
-# MediaMTX configuration for Boost robot camera
+# MediaMTX configuration for EV3 robot camera
 # iPhone Larix pushes RTMP to rtmp://<host>:1935/live/stream
 # ffmpeg captures a JPEG snapshot to /tmp/snapshot.jpg every 2 s (for AI + operator UI)
 

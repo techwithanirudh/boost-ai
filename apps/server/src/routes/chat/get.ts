@@ -1,4 +1,4 @@
-import { findChat } from "@boost/db/queries/chats";
+import { findChat } from "@ev3/db/queries/chats";
 import { createLogger } from "@/lib/logger";
 
 const log = createLogger("chat");

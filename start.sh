@@ -8,10 +8,10 @@ cd "$ROOT"
 RED='\033[0;31m'; YELLOW='\033[0;33m'; CYAN='\033[0;36m'
 GREEN='\033[0;32m'; BOLD='\033[1m'; RESET='\033[0m'
 
-info()  { echo -e "${BOLD}${CYAN}[boost]${RESET} $*"; }
-ok()    { echo -e "${BOLD}${GREEN}[boost]${RESET} $*"; }
-warn()  { echo -e "${BOLD}${YELLOW}[boost]${RESET} $*"; }
-die()   { echo -e "${BOLD}${RED}[boost]${RESET} $*" >&2; exit 1; }
+info()  { echo -e "${BOLD}${CYAN}[ev3]${RESET} $*"; }
+ok()    { echo -e "${BOLD}${GREEN}[ev3]${RESET} $*"; }
+warn()  { echo -e "${BOLD}${YELLOW}[ev3]${RESET} $*"; }
+die()   { echo -e "${BOLD}${RED}[ev3]${RESET} $*" >&2; exit 1; }
 
 # ── preflight checks ─────────────────────────────────────────────────────────
 [[ -f .env ]] || die ".env not found — copy .env.example and fill in secrets"

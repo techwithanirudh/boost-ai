@@ -23,11 +23,11 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
   head: () => ({
     meta: [
       {
-        title: "Boost AI",
+        title: "EV3 AI",
       },
       {
         name: "description",
-        content: "LEGO Boost autonomous robot control interface",
+        content: "LEGO EV3 autonomous robot control interface",
       },
     ],
     links: [
@@ -49,7 +49,7 @@ function HubOfflineBanner() {
     <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
       <p className="font-semibold text-base">Hub offline</p>
       <p className="max-w-xs text-muted-foreground text-sm">
-        The Boost hub is not reachable. Make sure the hub is powered on and
+        The EV3 hub is not reachable. Make sure the hub is powered on and
         connected, then refresh the page.
       </p>
     </div>

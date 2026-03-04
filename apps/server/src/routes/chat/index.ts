@@ -1,4 +1,4 @@
-import { listChats } from "@boost/db/queries/chats";
+import { listChats } from "@ev3/db/queries/chats";
 import { Hono } from "hono";
 import { requireHub } from "@/lib/hub/ready";
 import { createLogger } from "@/lib/logger";

@@ -1,5 +1,5 @@
 {
-  "name": "boost",
+  "name": "ev3",
   "private": true,
   "workspaces": {
     "packages": [
@@ -21,10 +21,10 @@
     "dev:native": "turbo -F native dev",
     "dev:web": "turbo -F web dev",
     "dev:server": "turbo -F server dev",
-    "db:push": "turbo -F @boost/db db:push",
-    "db:studio": "turbo -F @boost/db db:studio",
-    "db:generate": "turbo -F @boost/db db:generate",
-    "db:migrate": "turbo -F @boost/db db:migrate",
+    "db:push": "turbo -F @ev3/db db:push",
+    "db:studio": "turbo -F @ev3/db db:studio",
+    "db:generate": "turbo -F @ev3/db db:generate",
+    "db:migrate": "turbo -F @ev3/db db:migrate",
     "check": "ultracite check .",
     "check:spelling": "cspell -c .cspell.jsonc --no-progress --no-summary --no-must-find-files --unique --cache",
     "check:unsafe": "ultracite fix --unsafe true .",
@@ -32,13 +32,13 @@
     "prepare": "lefthook install"
   },
   "dependencies": {
-    "@boost/env": "workspace:*",
+    "@ev3/env": "workspace:*",
     "dotenv": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.0",
-    "@boost/config": "workspace:*",
+    "@ev3/config": "workspace:*",
     "@commitlint/cli": "^20.4.2",
     "@commitlint/config-conventional": "^20.4.2",
     "@commitlint/types": "^20.3.1",
